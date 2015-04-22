@@ -13,13 +13,13 @@
 #include <glog/logging.h>
 #include <gflags/gflags.h>
 
-DEFINE_string(lookup_table_param, "10:20:30", "lengths of lookup tables");
-DEFINE_int32(lookup_table_width, 50, "width of all the lookup tables");
-DEFINE_int32(minibatchsize, 10, "minibatchsize");
+DEFINE_string(lookup_table_param, "10:20:30:40", "lengths of lookup tables");
+DEFINE_int32(lookup_table_width, 1, "width of all the lookup tables");
+DEFINE_int32(minibatchsize, 9, "minibatchsize");
 DEFINE_double(sigma, 0.1, "sigma of gaussian distribution");
 DEFINE_double(mu, 0, "mu of gaussian distribution");
 DEFINE_string(init_type, "normal", "initial type normal, 123, 1, 0");
-DEFINE_string(nn_param, "100:50:2", "layer size of nn");
+DEFINE_string(nn_param, "5:3", "layer size of nn");
 DEFINE_bool(with_bias, false, "with bias");
 DEFINE_string(tranfer_func, "sigmoid", "sigmoid, tanh, ReLU");
 using namespace boost;
@@ -132,16 +132,22 @@ class NN {
   std::vector<double*> weight_matrixs;
   std::vector<double*> bias_vectors;
   std::vector<double*> layer_values;
-  std::vector<double*> layer_sigmas;
+  std::vector<double*> delta_matrixs;
+  std::vector<double*> error_matrixs;
+//  std::vector<double*> layer_sigmas;
   double* nn_output;
+  double* logloss;
+  double* softmax_sum;
   bool with_bias;
+  double learning_rate;
  public:
   NN(){}
   bool Init(LookupTable *lookup_table, std::string param,
             int m, std::string init_type, bool wb);
   bool Forward(double* input);
+  bool LogLoss(double* target);
+  bool Derivative(double* target);
   void InitWeight(std::string init_type);
-  void PrintWeight();
   int GetMiniBatchSize(){return minibatchsize;}
   int GetOutputSize(){return outputsize;}
   double* GetOutput(){return nn_output;}
@@ -154,8 +160,10 @@ bool NN::Init(LookupTable * lookup_table, std::string param,
    * m :minibatchsize
    * init_type: normal, 123 ,1, 0
    *  */
+  learning_rate = 0.001;
   with_bias=wb;
   minibatchsize = m;
+  softmax_sum = new double[minibatchsize];
   inputsize = lookup_table->GetOutputWidth();
   layersizes.push_back(inputsize);
   boost::trim(param);
@@ -176,16 +184,12 @@ bool NN::Init(LookupTable * lookup_table, std::string param,
     if(i==0) {
       double* layer_value = NULL;
       layer_values.push_back(layer_value);
-      double* layer_sigma = NULL;
-      layer_sigmas.push_back(layer_sigma);
       continue;
     }
 
     int layer_value_size = minibatchsize * layersizes[i];
     double* layer_value = new double[layer_value_size];
     layer_values.push_back(layer_value);
-    double* layer_sigma = new double[layer_value_size];
-    layer_sigmas.push_back(layer_sigma);
 
     int node_num = layersizes[i];
     int weight_num_of_node = layersizes[i-1];
@@ -194,8 +198,14 @@ bool NN::Init(LookupTable * lookup_table, std::string param,
     double* bias_vector = new double[node_num];
     weight_matrixs.push_back(weight_matrix);
     bias_vectors.push_back(bias_vector);
+
+    double* delta = new double[weight_num];
+    double* error = new double[layer_value_size];
+    delta_matrixs.push_back(delta);
+    error_matrixs.push_back(error);
   }
   nn_output = layer_values.back();
+  logloss = new double[1];
   InitWeight(init_type);
   return true;
 }
@@ -247,32 +257,6 @@ void NN::InitWeight(std::string init_type) {
   }
 }
 
-void NN::PrintWeight() {
-  std::cout<<"weight:"<<std::endl;
-  for(unsigned int i=1;i<layersizes.size();i++) {
-    int node_num = layersizes[i];
-    int weight_num_of_node = layersizes[i-1];
-    int weight_num = node_num * weight_num_of_node;
-    double* weight_matrix = weight_matrixs[i-1];
-    double* bias_vector = bias_vectors[i-1];
-    for(int j=0;j<weight_num;j++) {
-      std::cout<<weight_matrix[j]<<" ";
-    }
-    std::cout<<std::endl;
-    //  for(int j=0;j<node_num;j++) {
-    //    bias_vector[j] = normal_sample();
-    //  }
-  }
-  std::cout<<"bias"<<std::endl;
-  for(unsigned int i=1;i<layersizes.size();i++) {
-    int node_num = layersizes[i];
-    double* bias_vector = bias_vectors[i-1];
-    for(int j=0;j<node_num ;j++) {
-      std::cout<<bias_vector[j]<<" ";
-    }
-    std::cout<<std::endl;
-  }
-}
 
 bool NN::Forward(double* input) {
   layer_values[0] = input;
@@ -281,61 +265,185 @@ bool NN::Forward(double* input) {
    * minibatchsize * inputsize  = real input size
    *  */
 
-  double* normal_devider = new double[minibatchsize];
   for(int layer=1;layer<layersizes.size();layer++) {
 
-    const enum CBLAS_ORDER Order=CblasRowMajor;
-    const enum CBLAS_TRANSPOSE TransX=CblasNoTrans;
-    const enum CBLAS_TRANSPOSE TransW=CblasTrans;
-    const int M=minibatchsize;//X的行数，O的行数
-    const int N=layersizes[layer];//W的列数，O的列数
-    const int K=layersizes[layer-1];//X的列数，W的行数
-    const double alpha=1;
-    const double beta=0;
-    const int lda=K;
-    const int ldb=K;
-    const int ldc=N;
+    enum CBLAS_ORDER Order=CblasRowMajor;
+    enum CBLAS_TRANSPOSE TransX=CblasNoTrans;
+    enum CBLAS_TRANSPOSE TransW=CblasTrans;
+    int M=minibatchsize;//X的行数，O的行数
+    int N=layersizes[layer];//W的列数，O的列数
+    int K=layersizes[layer-1];//X的列数，W的行数
+    double alpha=1;
+    double beta=0;
+    int lda=K;
+    int ldb=K;
+    int ldc=N;
     double* X = layer_values[layer-1];
     double* W= weight_matrixs[layer-1];
-    double* sigma = layer_sigmas[layer];
     double* output = layer_values[layer];
     cblas_dgemm(Order, TransX, TransW, M, N, K,
                 alpha, X, lda,
                 W, ldb,
-                beta, sigma, ldc);
+                beta, output, ldc);
     for(int i=0;i<minibatchsize;i++) {
-      normal_devider[i]=0;
       for(int j=0;j<layersizes[layer];j++) {
         int idx = i * layersizes[layer] + j;
         if(layer == layersizes.size()-1) {
-          output[idx] = exp(sigma[idx]);
-          normal_devider[i] += output[idx];
+          output[idx] = exp(output[idx]);
         }else {
-          output[idx] = sigmoid(sigma[idx]);
+          output[idx] = sigmoid(output[idx]);
         }
-    //    output[idx] = sigma[idx];
+      }
+    }
+
+    if(layer == layersizes.size()-1){
+      double ones[3]={1,1,1};
+      Order = CblasRowMajor;
+      TransX = CblasNoTrans;
+      TransW = CblasTrans;
+      M=minibatchsize;
+      N=1;
+      K=layersizes[layer];
+      alpha=1;
+      beta = 0;
+      lda=K;
+      ldb=K;
+      ldc=N;
+
+      cblas_dgemm(Order, TransX, TransW,
+                  M, N, K,
+                  alpha, output, lda,
+                  ones, ldb,
+                  beta, softmax_sum, ldc
+                 );
+
+      std::cout<<std::endl;
+      for(int i=0;i<minibatchsize;i++) {
+        std::cout<<"sample "<<i<<": ";
+        for(int j=0;j<layersizes[layer];j++) {
+          int idx = i*layersizes[layer]+j;
+          output[idx] = output[idx]/softmax_sum[i];
+          std::cout<<output[idx]<<" ";
+        }
+        std::cout<<std::endl;
       }
     }
   }
+}
 
-  double* final_output = layer_values.back();
-  for(int i=0;i<minibatchsize;i++) {
-    double sum = 0;
-    for(int j=0;j<layersizes.back();j++) {
-      int idx = i * layersizes.back() + j;
-      final_output[idx] /= normal_devider[i];
+bool NN::Derivative(double* target) {
 
+  for(int layer=layersizes.size()-1;layer>=1;layer--){
+
+    int layersize = layersizes[layer];
+    double* factor = error_matrixs[layer-1];
+    double* delta = delta_matrixs[layer-1];
+    if(layer == layersizes.size()-1) {
+      for(int i=0;i<minibatchsize;i++) {
+        int t = (int)target[i];
+        factor[layersize*i]=0;
+        factor[layersize*i+1]=0;
+        factor[layersize*i+2]=0;
+        factor[layersize*i + t]=1;
+      }
+
+      double* output = layer_values.back();//minibatchsize *2
+      int N = minibatchsize * layersize;
+      double alpha = -1;
+      cblas_daxpy(N, alpha, output, 1, factor, 1);
+
+      double* X = layer_values[layer-1];
+      int hidelayer_size = layersizes[layer-1];
+      int weight_idx = layer-1;
+      const int M = layersize;
+      N = hidelayer_size;
+      const int K = minibatchsize;
+      const int lda = M;
+      const int ldb = N;
+      const int ldc = N;
+      cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
+                M, N, K,
+                1.0, factor, lda,
+                X, ldb,
+                0.0, delta, ldc
+                );
+//      cblas_daxpy(layersize*hidelayer_size, learning_rate, delta, 1,
+//               weight_matrixs[weight_idx], 1
+//              );
+    } else {
+
+      int weight_idx = layer-1;
+      int downstream_layersize = layersizes[layer+1];
+      double* downstream_factor = error_matrixs[weight_idx+1];//下游的
+      double* downstream_weight = weight_matrixs[weight_idx+1];
+      int M = minibatchsize;
+      int N = layersize;
+      int K = downstream_layersize;
+      int lda = K;
+      int ldb = K;
+      int ldc = N;
+
+      cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+                  M, N, K,
+                  1.0, downstream_factor, lda,
+                  downstream_weight, ldb,
+                  0.0, factor, ldc
+                 );//把下游的误差，通过权值累加到这一层
+      double* O = layer_values[layer];
+      //std::cout<<"layersize:"<<layersize<<std::endl;
+      for(int i=0;i<minibatchsize;i++) {
+        for(int j=0;j<layersize;j++) {
+          int idx=i*layersize+j;
+          factor[idx]=factor[idx]*O[idx]*(1-O[idx]);
+        //  std::cout<<factor[idx]<<" ";
+        }
+      }
+      for(int i=0;i<minibatchsize;i++) {
+        for(int j=0;j<layersize;j++) {
+        //  std::cout<<O[i*layersize+j]<<" ";
+        }
+        //std::cout<<std::endl;
+      }
+      double* X = layer_values[layer-1];
+      for(int i=0;i<minibatchsize;i++) {
+        for(int j=0;j<layersizes[layer-1];j++) {
+//          std::cout<<X[i*layersizes[layer-1]+j]<<" ";
+        }
+//        std::cout<<std::endl;
+      }
+      int hidelayer_size = layersizes[layer-1];
+      M = layersize;
+      N = hidelayer_size;
+      K = minibatchsize;
+      lda = M;
+      ldb = M;
+      ldc = N;
+      cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
+                  M, N, K,
+                  -1.0, factor, lda,
+                  X, ldb,
+                  0.0, delta, ldc
+                  );
     }
+
+    int hidelayer_size=layersizes[layer-1];
+    int weight_idx = layer - 1;
+    cblas_daxpy(layersize*hidelayer_size, learning_rate, delta, 1,
+                weight_matrixs[weight_idx], 1
+               );
   }
+  return true;
 }
 
 void NN::CompareWithTorch() {
   std::ifstream weight_fin("data/weight.txt");
   std::ifstream input_fin("data/input.txt");
+  std::ifstream target_fin("data/target.txt");
   std::string line;
   std::vector<std::string> parts;
   //std::cout<<"minibatchsize:"<<minibatchsize<<std::endl;
   double* input = new double[minibatchsize*inputsize];
+  double* target = new double[minibatchsize];
   for(int i=0;i<minibatchsize;i++) {
     getline(input_fin, line);
     boost::trim(line);
@@ -348,18 +456,16 @@ void NN::CompareWithTorch() {
       input[idx] = boost::lexical_cast<double>(parts[j]);
     }
   }
+   for(int i=0;i<minibatchsize;i++) {
+    getline(target_fin, line);
+    boost::trim(line);
+    target[i] = boost::lexical_cast<double>(line);
+  }
+
+  std::cout<<"load weight"<<std::endl;
   for(int layer=1;layer<layersizes.size();layer++) {
- //   boost::trim(line);
-//    boost::split(parts, line, boost::is_any_of(" "));
     double* weight = weight_matrixs[layer-1];
     int weight_length = layersizes[layer-1] * layersizes[layer];
-
-//    if(parts.size()!=weight_length) {
- //     LOG(ERROR)<<"weight file error. parts.size() = "<<parts.size()
-  //        <<" weight_length="<<weight_length;
-   //   return;
-   // }
- //   std::cout<<parts.size()<<std::endl;
     for(int j=0;j<weight_length;j++) {
       getline(weight_fin, line);
       weight[j] = boost::lexical_cast<double>(line);
@@ -367,7 +473,7 @@ void NN::CompareWithTorch() {
   }
   weight_fin.close();
   input_fin.close();
-
+  target_fin.close();
   Forward(input);
   double* output = GetOutput();
   std::cout<<"Compare With Torch"<<std::endl;
@@ -378,7 +484,50 @@ void NN::CompareWithTorch() {
     }
     std::cout<<std::endl;
   }
+//  LogLoss(target);
+  for(int i=0;i<10000;i++) {
+    Forward(input);
+    Derivative(target);
+  }
+}
 
+bool NN::LogLoss(double* target) {
+  //call LogLoss after calling Forward
+  int k = 3;
+  double* y = new double[k*minibatchsize];
+  for(int i=0;i<minibatchsize;i++) {
+    y[2*i+(int)target[i]]=1;
+    y[2*i+(1-(int)target[i])]=0;
+  }
+  double* output = layer_values.back();
+
+  const enum CBLAS_ORDER Order = CblasRowMajor;
+  const enum CBLAS_TRANSPOSE TransT = CblasNoTrans;
+  const enum CBLAS_TRANSPOSE TransO = CblasTrans;
+  const int M = 1;
+  const int N = 1;
+  const int K = minibatchsize * k;
+  const double alpha = 1;
+  const double beta = 0;
+  const int lda = K;
+  const int ldb = K;
+  const int ldc = N;
+  cblas_dgemm(Order, TransT, TransO,
+              M, N, K,
+              alpha, y, lda,
+              output, ldb,
+              beta, logloss, ldc
+             );
+  logloss[0] /=minibatchsize;
+
+  double* sum=new double[minibatchsize];
+  double ones_mat[2] = {1,1};
+  for(int i=0;i<minibatchsize;i++) {
+
+  }
+
+
+  return true;
 }
 
 
@@ -388,20 +537,6 @@ int main(int argc, char* argv[]) {
   FLAGS_log_dir = "./log";
   //LOG(INFO)<<"Hello Glog";
   //LOG(ERROR)<<"glog error";
-  int i=0;
-  double A[6] = {1.0,2.0,3.0,4.0,5.0,6.0};
-  double B[6] = {1.0,2.0,3.0,4.0,5.0,6.0};
-  double C[9] = {.5,.5,.5,.5,.5,.5,.5,.5,.5};
-  cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,3,3,2,1,A, 2, B, 2,0,C,3);
-  std::cout.precision(15);
-  for(i=0; i<3; i++)
-  {
-    for(int j=0;j<3;j++)
-    {
-      std::cout<<C[i*3+j]<<" ";
-    }
-      std::cout<<("\n");
-  }
 
   LookupTable* lookup_table = new LookupTable();
   if(lookup_table->Init(FLAGS_lookup_table_param, FLAGS_lookup_table_width)) {
@@ -418,7 +553,7 @@ int main(int argc, char* argv[]) {
     }
  //   std::cout<<std::endl;
   }
-  std::cout<<"lookup table output size:"<<lookup_table->GetOutputWidth()<<std::endl;
+//  std::cout<<"lookup table output size:"<<lookup_table->GetOutputWidth()<<std::endl;
   NN* nn = new NN();
   nn->Init(lookup_table, FLAGS_nn_param, FLAGS_minibatchsize, FLAGS_init_type, FLAGS_with_bias);
   double* input = new double[lookup_table->GetOutputWidth()*FLAGS_minibatchsize];
@@ -430,9 +565,9 @@ int main(int argc, char* argv[]) {
   for(int i=0;i<nn->GetMiniBatchSize();i++) {
     for(int j=0;j<nn->GetOutputSize();j++) {
       int idx = i*nn->GetOutputSize() + j;
-      std::cout<<output[idx]<<" ";
+//     std::cout<<output[idx]<<" ";
     }
-    std::cout<<std::endl;
+//    std::cout<<std::endl;
   }
   nn->CompareWithTorch();
   //  nn->PrintWeight();
