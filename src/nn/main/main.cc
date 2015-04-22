@@ -13,6 +13,8 @@
 #include <glog/logging.h>
 #include <gflags/gflags.h>
 
+
+
 DEFINE_string(lookup_table_param, "10:20:30:40", "lengths of lookup tables");
 DEFINE_int32(lookup_table_width, 1, "width of all the lookup tables");
 DEFINE_int32(minibatchsize, 9, "minibatchsize");
