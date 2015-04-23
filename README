@@ -1,0 +1,2 @@
+训练过程从train.cc开始，调用NN.h 和LookupTable.h
+main.cc是一个代码包含了所有的类，没有进行封装和划分
