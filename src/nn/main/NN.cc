@@ -10,6 +10,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/random.hpp>
+#include <glog/logging.h>
 
 #include "main/util.h"
 #include "main/NN.h"
@@ -125,7 +126,6 @@ bool NN::Forward(double* input, int batchsize) {
    * minibatch
    * minibatchsize * inputsize  = real input size
    *  */
-
   for(int layer=1;layer<layersizes.size();layer++) {
 
     enum CBLAS_ORDER Order=CblasRowMajor;
@@ -158,7 +158,10 @@ bool NN::Forward(double* input, int batchsize) {
     }
 
     if(layer == layersizes.size()-1){
-      double ones[3]={1,1,1};
+      double* ones = new double[outputsize];
+      for(int i=0;i<outputsize;i++) {
+        ones[i] = 1;
+      }
       Order = CblasRowMajor;
       TransX = CblasNoTrans;
       TransW = CblasTrans;
@@ -183,6 +186,7 @@ bool NN::Forward(double* input, int batchsize) {
           output[idx] = output[idx]/softmax_sum[i];
         }
       }
+      delete [] ones;
     }
   }
 }
@@ -190,16 +194,17 @@ bool NN::Forward(double* input, int batchsize) {
 bool NN::Derivative(double* target, int batchsize) {
 
   for(int layer=layersizes.size()-1;layer>=1;layer--){
-
     int layersize = layersizes[layer];
     double* factor = error_matrixs[layer-1];
     double* delta = delta_matrixs[layer-1];
     if(layer == layersizes.size()-1) {
       for(int i=0;i<batchsize;i++) {
         int t = (int)target[i];
-        factor[layersize*i]=0;
-        factor[layersize*i+1]=0;
-        factor[layersize*i+2]=0;
+
+        for(int j=0;j<layersize;j++) {
+          factor[layersize*i + j] = 0;
+        }
+
         factor[layersize*i + t]=1;
       }
 
@@ -223,9 +228,6 @@ bool NN::Derivative(double* target, int batchsize) {
                 X, ldb,
                 0.0, delta, ldc
                 );
-      cblas_daxpy(layersize*hidelayer_size, learning_rate, delta, 1,
-               weight_matrixs[weight_idx], 1
-              );
     } else {
 
       int weight_idx = layer-1;
@@ -241,7 +243,7 @@ bool NN::Derivative(double* target, int batchsize) {
 
       cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
                   M, N, K,
-                  1.0, downstream_factor, lda,
+                  -1.0, downstream_factor, lda,
                   downstream_weight, ldb,
                   0.0, factor, ldc
                  );//把下游的误差，通过权值累加到这一层
@@ -253,16 +255,15 @@ bool NN::Derivative(double* target, int batchsize) {
           factor[idx]=factor[idx]*O[idx]*(1-O[idx]);
         }
       }
-
+      double* X = layer_values[layer-1];
       int hidelayer_size = layersizes[layer-1];
       M = layersize;
       N = hidelayer_size;
       K = batchsize;
       lda = M;
-      ldb = M;
+      ldb = N;
       ldc = N;
-      factor = new double[];
-      std::cout<<"M:"<<M<<"\tN:"<<N<<"\tK:"<<K<<std::endl;
+
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                   M, N, K,
                   -1.0, factor, lda,
@@ -281,24 +282,25 @@ bool NN::Derivative(double* target, int batchsize) {
 }
 
 bool NN::Train(double* feature, double* target, int instancenum) {
+  int epoch = 0;
+  while(true) {
+    std::cout<<"epoch:"<<epoch++<<std::endl;
+    for(int i=0;i<instancenum;i+=minibatchsize) {
+      if(i%1000==0) {
+        std::cout<<i<<"/"<<instancenum<<std::endl;
+        std::cout.flush();
+      }
+      int batchsize =
+          i+minibatchsize<instancenum ? minibatchsize : instancenum - i;
+      double* feature_start_ptr = feature + i*inputsize;
+      double* target_start_ptr = target + i;
 
-  std::cout<<"instancenu:"<<instancenum<<std::endl;
-  for(int i=0;i<instancenum;i+=minibatchsize) {
-    if(i%900==0) {
-      std::cout<<i<<std::endl;
+      Forward(feature_start_ptr, batchsize);
+      Derivative(target_start_ptr, batchsize);
     }
-    //std::cout<<i<<std::endl;
-    int batchsize =
-        i+minibatchsize<instancenum ? minibatchsize : instancenum - i;
-    //if(i>instancenum) {
-    //  std::cout<<i<<std::endl;
-    // }
-//    std::cout<<batchsize<<std::endl;
-    double* feature_start_ptr = feature + i*inputsize;
-    double* target_start_ptr = target + i;
-
-    Forward(feature_start_ptr, batchsize);
-    Derivative(target_start_ptr, batchsize);
+    double logloss;
+    LogLoss(feature, target, logloss, instancenum);
+    std::cout<<"LogLoss:"<<logloss<<std::endl;
   }
   return true;
 }
@@ -360,40 +362,59 @@ void NN::CompareWithTorch() {
 }
 */
 
-bool NN::LogLoss(double* target, double& logloss) {
+bool NN::LogLoss(double* feature, double* target, double &logloss, int instancenum) {
   //call LogLoss after calling Forward
-  int k = 3;
-  double* y = new double[k*minibatchsize];
-  for(int i=0;i<minibatchsize;i++) {
-    y[2*i+(int)target[i]]=1;
-    y[2*i+(1-(int)target[i])]=0;
+  logloss = 0;
+  double* logloss_tmp = new double[1];
+  for(int i=0;i<instancenum;i+=minibatchsize) {
+    int batchsize =
+        i+minibatchsize<instancenum ? minibatchsize : instancenum - i;
+    double* feature_start_ptr = feature + i*inputsize;
+    double* target_start_ptr = target + i;
+
+    Forward(feature_start_ptr, batchsize);
+    double* y  = layer_values.back();
+    for(int b=0;b<batchsize;b++) {
+//      std::cout<<std::endl;
+//      std::cout<<target_start_ptr[b]<<std::endl;
+      for(int j=0;j<outputsize;j++) {
+//        std::cout<<y[b*outputsize+j]<<" ";
+        y[b*outputsize+j] = log(y[b*outputsize+j]);
+      }
+//      std::cout<<std::endl;
+    }
+    double* factor = error_matrixs.back();//借用一下这个空间
+    for(int i=0;i<batchsize;i++) {
+        int t = (int)target_start_ptr[i];
+        for(int j=0;j<outputsize;j++) {
+          factor[outputsize*i + j] = 0;
+        }
+        factor[outputsize*i + t]=1;
+      }
+
+
+    const enum CBLAS_ORDER Order = CblasRowMajor;
+    const enum CBLAS_TRANSPOSE TransT = CblasNoTrans;
+    const enum CBLAS_TRANSPOSE TransO = CblasTrans;
+    const int M = 1;
+    const int N = 1;
+    const int K = batchsize * outputsize;
+    const double alpha = 1;
+    const double beta = 0;
+    const int lda = K;
+    const int ldb = K;
+    const int ldc = N;
+    cblas_dgemm(Order, TransT, TransO,
+                M, N, K,
+                alpha, factor, lda,
+                y, ldb,
+                beta, logloss_tmp, ldc
+               );
+      logloss+=logloss_tmp[0];
   }
-  double* output = layer_values.back();
-
-  const enum CBLAS_ORDER Order = CblasRowMajor;
-  const enum CBLAS_TRANSPOSE TransT = CblasNoTrans;
-  const enum CBLAS_TRANSPOSE TransO = CblasTrans;
-  const int M = 1;
-  const int N = 1;
-  const int K = minibatchsize * k;
-  const double alpha = 1;
-  const double beta = 0;
-  const int lda = K;
-  const int ldb = K;
-  const int ldc = N;
-  cblas_dgemm(Order, TransT, TransO,
-              M, N, K,
-              alpha, y, lda,
-              output, ldb,
-              beta, &logloss, ldc
-             );
-  logloss /=minibatchsize;
-
-  double* sum=new double[minibatchsize];
-  double ones_mat[2] = {1,1};
-  for(int i=0;i<minibatchsize;i++) {
-
-  }
+  logloss/=instancenum;
+  logloss = -logloss;
+  delete [] logloss_tmp;
   return true;
 }
 
