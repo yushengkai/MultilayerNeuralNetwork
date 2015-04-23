@@ -30,7 +30,7 @@ class NN {
   bool Init(LookupTable *lookup_table, std::string param,
             int m, std::string init_type, bool wb);
   bool Forward(double* input, int batchsize);
-  bool LogLoss(double* target, double& logloss);
+  bool LogLoss(double* feature, double* target, double &logloss, int instancenum);
   bool Derivative(double* target, int batchsize);
   bool Train(double* feature, double* target, int instancenum);
   void InitWeight(std::string init_type);
