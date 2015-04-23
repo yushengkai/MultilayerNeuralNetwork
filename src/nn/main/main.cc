@@ -493,6 +493,7 @@ void NN::CompareWithTorch() {
   }
 }
 
+
 bool NN::LogLoss(double* target) {
   //call LogLoss after calling Forward
   int k = 3;
