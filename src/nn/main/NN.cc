@@ -67,7 +67,6 @@ bool NN::Init(LookupTable * lookup_table, std::string param,
   }
 
   nn_output = layer_values.back();
-  logloss = new double[1];
   InitWeight(init_type);
   return true;
 }
@@ -120,7 +119,7 @@ void NN::InitWeight(std::string init_type) {
 }
 
 
-bool NN::Forward(double* input) {
+bool NN::Forward(double* input, int batchsize) {
   layer_values[0] = input;
   /*
    * minibatch
@@ -132,7 +131,7 @@ bool NN::Forward(double* input) {
     enum CBLAS_ORDER Order=CblasRowMajor;
     enum CBLAS_TRANSPOSE TransX=CblasNoTrans;
     enum CBLAS_TRANSPOSE TransW=CblasTrans;
-    int M=minibatchsize;//X的行数，O的行数
+    int M=batchsize;//X的行数，O的行数
     int N=layersizes[layer];//W的列数，O的列数
     int K=layersizes[layer-1];//X的列数，W的行数
     double alpha=1;
@@ -147,7 +146,7 @@ bool NN::Forward(double* input) {
                 alpha, X, lda,
                 W, ldb,
                 beta, output, ldc);
-    for(int i=0;i<minibatchsize;i++) {
+    for(int i=0;i<batchsize;i++) {
       for(int j=0;j<layersizes[layer];j++) {
         int idx = i * layersizes[layer] + j;
         if(layer == layersizes.size()-1) {
@@ -163,7 +162,7 @@ bool NN::Forward(double* input) {
       Order = CblasRowMajor;
       TransX = CblasNoTrans;
       TransW = CblasTrans;
-      M=minibatchsize;
+      M=batchsize;
       N=1;
       K=layersizes[layer];
       alpha=1;
@@ -171,7 +170,6 @@ bool NN::Forward(double* input) {
       lda=K;
       ldb=K;
       ldc=N;
-
       cblas_dgemm(Order, TransX, TransW,
                   M, N, K,
                   alpha, output, lda,
@@ -179,21 +177,17 @@ bool NN::Forward(double* input) {
                   beta, softmax_sum, ldc
                  );
 
-      std::cout<<std::endl;
-      for(int i=0;i<minibatchsize;i++) {
-        std::cout<<"sample "<<i<<": ";
+      for(int i=0;i<batchsize;i++) {
         for(int j=0;j<layersizes[layer];j++) {
           int idx = i*layersizes[layer]+j;
           output[idx] = output[idx]/softmax_sum[i];
-          std::cout<<output[idx]<<" ";
         }
-        std::cout<<std::endl;
       }
     }
   }
 }
 
-bool NN::Derivative(double* target) {
+bool NN::Derivative(double* target, int batchsize) {
 
   for(int layer=layersizes.size()-1;layer>=1;layer--){
 
@@ -201,7 +195,7 @@ bool NN::Derivative(double* target) {
     double* factor = error_matrixs[layer-1];
     double* delta = delta_matrixs[layer-1];
     if(layer == layersizes.size()-1) {
-      for(int i=0;i<minibatchsize;i++) {
+      for(int i=0;i<batchsize;i++) {
         int t = (int)target[i];
         factor[layersize*i]=0;
         factor[layersize*i+1]=0;
@@ -210,7 +204,7 @@ bool NN::Derivative(double* target) {
       }
 
       double* output = layer_values.back();//minibatchsize *2
-      int N = minibatchsize * layersize;
+      int N = batchsize * layersize;
       double alpha = -1;
       cblas_daxpy(N, alpha, output, 1, factor, 1);
 
@@ -219,7 +213,7 @@ bool NN::Derivative(double* target) {
       int weight_idx = layer-1;
       const int M = layersize;
       N = hidelayer_size;
-      const int K = minibatchsize;
+      const int K = batchsize;
       const int lda = M;
       const int ldb = N;
       const int ldc = N;
@@ -229,16 +223,16 @@ bool NN::Derivative(double* target) {
                 X, ldb,
                 0.0, delta, ldc
                 );
-//      cblas_daxpy(layersize*hidelayer_size, learning_rate, delta, 1,
-//               weight_matrixs[weight_idx], 1
-//              );
+      cblas_daxpy(layersize*hidelayer_size, learning_rate, delta, 1,
+               weight_matrixs[weight_idx], 1
+              );
     } else {
 
       int weight_idx = layer-1;
       int downstream_layersize = layersizes[layer+1];
       double* downstream_factor = error_matrixs[weight_idx+1];//下游的
       double* downstream_weight = weight_matrixs[weight_idx+1];
-      int M = minibatchsize;
+      int M = batchsize;
       int N = layersize;
       int K = downstream_layersize;
       int lda = K;
@@ -252,34 +246,23 @@ bool NN::Derivative(double* target) {
                   0.0, factor, ldc
                  );//把下游的误差，通过权值累加到这一层
       double* O = layer_values[layer];
-      //std::cout<<"layersize:"<<layersize<<std::endl;
-      for(int i=0;i<minibatchsize;i++) {
+
+      for(int i=0;i<batchsize;i++) {
         for(int j=0;j<layersize;j++) {
           int idx=i*layersize+j;
           factor[idx]=factor[idx]*O[idx]*(1-O[idx]);
-        //  std::cout<<factor[idx]<<" ";
         }
       }
-      for(int i=0;i<minibatchsize;i++) {
-        for(int j=0;j<layersize;j++) {
-        //  std::cout<<O[i*layersize+j]<<" ";
-        }
-        //std::cout<<std::endl;
-      }
-      double* X = layer_values[layer-1];
-      for(int i=0;i<minibatchsize;i++) {
-        for(int j=0;j<layersizes[layer-1];j++) {
-//          std::cout<<X[i*layersizes[layer-1]+j]<<" ";
-        }
-//        std::cout<<std::endl;
-      }
+
       int hidelayer_size = layersizes[layer-1];
       M = layersize;
       N = hidelayer_size;
-      K = minibatchsize;
+      K = batchsize;
       lda = M;
       ldb = M;
       ldc = N;
+      factor = new double[];
+      std::cout<<"M:"<<M<<"\tN:"<<N<<"\tK:"<<K<<std::endl;
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                   M, N, K,
                   -1.0, factor, lda,
@@ -297,6 +280,29 @@ bool NN::Derivative(double* target) {
   return true;
 }
 
+bool NN::Train(double* feature, double* target, int instancenum) {
+
+  std::cout<<"instancenu:"<<instancenum<<std::endl;
+  for(int i=0;i<instancenum;i+=minibatchsize) {
+    if(i%900==0) {
+      std::cout<<i<<std::endl;
+    }
+    //std::cout<<i<<std::endl;
+    int batchsize =
+        i+minibatchsize<instancenum ? minibatchsize : instancenum - i;
+    //if(i>instancenum) {
+    //  std::cout<<i<<std::endl;
+    // }
+//    std::cout<<batchsize<<std::endl;
+    double* feature_start_ptr = feature + i*inputsize;
+    double* target_start_ptr = target + i;
+
+    Forward(feature_start_ptr, batchsize);
+    Derivative(target_start_ptr, batchsize);
+  }
+  return true;
+}
+/*
 void NN::CompareWithTorch() {
   std::ifstream weight_fin("data/weight.txt");
   std::ifstream input_fin("data/input.txt");
@@ -352,8 +358,9 @@ void NN::CompareWithTorch() {
     Derivative(target);
   }
 }
+*/
 
-bool NN::LogLoss(double* target) {
+bool NN::LogLoss(double* target, double& logloss) {
   //call LogLoss after calling Forward
   int k = 3;
   double* y = new double[k*minibatchsize];
@@ -378,9 +385,9 @@ bool NN::LogLoss(double* target) {
               M, N, K,
               alpha, y, lda,
               output, ldb,
-              beta, logloss, ldc
+              beta, &logloss, ldc
              );
-  logloss[0] /=minibatchsize;
+  logloss /=minibatchsize;
 
   double* sum=new double[minibatchsize];
   double ones_mat[2] = {1,1};

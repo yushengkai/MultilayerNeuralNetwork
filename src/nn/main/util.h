@@ -5,11 +5,13 @@
 #ifndef UTIL_H_
 #define UTIL_H_
 #include <gflags/gflags.h>
+#include <string>
 //#include <boost/random.hpp>
 double sigmoid(double x);
 double tanha(double );
 double ReLU(double x);
-
+bool ReadMNIST(std::string filename,double* &feature,double* &target,
+               int &featuresize, int &instancenum);
 
 /*
 
