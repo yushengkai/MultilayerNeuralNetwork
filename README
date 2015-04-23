@@ -1,13 +1,13 @@
-训练过程从train.cc开始，调用NN.h 和LookupTable.h
-main.cc是一个代码包含了所有的类，没有进行封装和划分
-softmax.cc也是一个单独的文件，是写了一个简单的softmax.cc回归
+训练过程从train.cc开始，调用NN.h 和LookupTable.h
+main.cc是一个代码包含了所有的类，没有进行封装和划分
+softmax.cc也是一个单独的文件，是写了一个简单的softmax.cc回归,多层神经网络和它道理一样
 
 代码还没有最终完成。。。
 
 
 ====================================================================
-Training process starts from train.cc which invokes NN.h and LookupTable.h
-main.cc is a code file which contain all classes and function. It hasn't been Encapsulated.
+Training process starts from train.cc which invokes NN.h and LookupTable.h
+main.cc is a code file which contain all classes and function. It hasn't been Encapsulated.MultilayerNeuralNetwork is similar to it.
 softmax.cc is also a single file, which is a single layer softmax regression.
 
 This project has not finished...
