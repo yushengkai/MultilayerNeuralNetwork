@@ -7,11 +7,18 @@
 #include <gflags/gflags.h>
 #include <string>
 //#include <boost/random.hpp>
+
+typedef struct DataSet {
+  double* feature;
+  double* target;
+  int width;
+  int length;
+} DataSet;
+
 double sigmoid(double x);
 double tanha(double );
 double ReLU(double x);
-bool ReadMNIST(std::string filename,double* &feature,double* &target,
-               int &featuresize, int &instancenum);
+bool ReadMNIST(std::string filename, DataSet* dataset);
 
 /*
 

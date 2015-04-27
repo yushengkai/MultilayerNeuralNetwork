@@ -8,7 +8,7 @@
 #include <string>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
-#include "main/util.h"
+#include "tool/util.h"
 
 double sigmoid(double x) {
   return 1/(1+exp(-x));
@@ -23,13 +23,17 @@ double ReLU(double x) {
   return log(1+exp(x));
 }
 
-bool ReadMNIST(std::string filename,double* &feature,double* &target,
-               int &featuresize, int &instancenum) {
+bool ReadMNIST(std::string filename, DataSet* dataset) {
+  double* feature;
+  double* target;
+  int featuresize;
+  int instancenum;
   int count = 0;
   std::ifstream fin(filename.c_str());
   if (!fin){
     return false;
   }
+  featuresize = 784;
   std::string line;
   getline(fin, line);
   while(getline(fin ,line)) {
@@ -56,6 +60,10 @@ bool ReadMNIST(std::string filename,double* &feature,double* &target,
 
   }
   fin.close();
+  dataset->feature = feature;
+  dataset->target = target;
+  dataset->length = instancenum;
+  dataset->width = featuresize;
   return true;
 }
 

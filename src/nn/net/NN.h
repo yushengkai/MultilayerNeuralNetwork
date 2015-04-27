@@ -7,37 +7,37 @@
 
 #include <vector>
 #include <string>
-#include "main/LookupTable.h"
-
+#include "net/LookupTable.h"
+#include "tool/util.h"
 class NN {
  private:
   int inputsize;
   int outputsize;
   int minibatchsize;
+  double* nn_output;
+  double* softmax_sum;
+  bool with_bias;
+  double learning_rate;
+ public:
   std::vector<int> layersizes;
   std::vector<double*> weight_matrixs;
   std::vector<double*> bias_vectors;
   std::vector<double*> layer_values;
   std::vector<double*> delta_matrixs;
   std::vector<double*> error_matrixs;
-//  std::vector<double*> layer_sigmas;
-  double* nn_output;
-  double* softmax_sum;
-  bool with_bias;
-  double learning_rate;
- public:
   NN(){}
   bool Init(LookupTable *lookup_table, std::string param,
             int m, std::string init_type, bool wb);
   bool Forward(double* input, int batchsize);
   bool LogLoss(double* feature, double* target, double &logloss, int instancenum);
   bool Derivative(double* target, int batchsize);
-  bool Train(double* feature, double* target, int instancenum);
+  bool Train(DataSet* trainData);
   void InitWeight(std::string init_type);
   int GetMiniBatchSize(){return minibatchsize;}
   int GetOutputSize(){return outputsize;}
+  int GetInputSize(){return inputsize;}
   double* GetOutput(){return nn_output;}
-//  void CompareWithTorch();
+  void CompareWithTorch();
 };
 
 

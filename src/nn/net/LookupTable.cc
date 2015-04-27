@@ -6,8 +6,8 @@
 #include <boost/random.hpp>
 //#include <glog/logging.h>
 
-#include "main/util.h"
-#include "main/LookupTable.h"
+#include "tool/util.h"
+#include "net/LookupTable.h"
 
 
 static boost::mt19937 rng(static_cast<unsigned>(std::time(0)));

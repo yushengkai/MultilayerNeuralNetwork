@@ -12,8 +12,8 @@
 #include <boost/random.hpp>
 #include <glog/logging.h>
 
-#include "main/util.h"
-#include "main/NN.h"
+#include "tool/util.h"
+#include "net/NN.h"
 
 static boost::mt19937 rng(static_cast<unsigned>(std::time(0)));
 boost::normal_distribution<double> norm_dist1(0, 0.1);
@@ -54,7 +54,7 @@ bool NN::Init(LookupTable * lookup_table, std::string param,
     layer_values.push_back(layer_value);
 
     int node_num = layersizes[i];
-    int weight_num_of_node = layersizes[i-1];
+    int weight_num_of_node = layersizes[i-1] + 1;
     int weight_num = weight_num_of_node * node_num;
     double* weight_matrix = new double[weight_num];
     double* bias_vector = new double[node_num];
@@ -69,17 +69,26 @@ bool NN::Init(LookupTable * lookup_table, std::string param,
 
   nn_output = layer_values.back();
   InitWeight(init_type);
+  LOG(INFO)<<"Initialization finished ...";
   return true;
 }
 
 void NN::InitWeight(std::string init_type) {
+
+  std::ifstream fin;
+  if(init_type == "fromfile") {
+    fin.open("data/weight.txt");
+    std::cout<<"init weight from data/weight.txt"<<std::endl;
+  }
+
   for(unsigned int i=1;i<layersizes.size();i++) {
     int node_num = layersizes[i];
     int weight_num_of_node = layersizes[i-1];
     int weight_num = node_num * weight_num_of_node;
     double* weight_matrix = weight_matrixs[i-1];
     double* bias_vector = bias_vectors[i-1];
-    for(int j=0;j<weight_num;j++) {
+    std::string line;
+   for(int j=0;j<weight_num;j++) {
       if(init_type=="normal")
       {
         weight_matrix[j] = normal_sample1();
@@ -89,6 +98,10 @@ void NN::InitWeight(std::string init_type) {
         weight_matrix[j] = 1;
       } else if (init_type == "0") {
         weight_matrix[j] = 0;
+      } else if(init_type == "fromfile") {
+        getline(fin, line);
+        boost::trim(line);
+        weight_matrix[j] = boost::lexical_cast<double>(line);
       } else {
         weight_matrix[j] = normal_sample1();
       }
@@ -103,6 +116,10 @@ void NN::InitWeight(std::string init_type) {
         bias_vector[j] = 1;
       } else if (init_type == "0") {
         bias_vector[j] = 0;
+      } else if(init_type == "fromfile") {
+        getline(fin, line);
+        boost::trim(line);
+        bias_vector[j] = boost::lexical_cast<double>(line);
       } else {
         bias_vector[j] = normal_sample1();
       }
@@ -113,10 +130,14 @@ void NN::InitWeight(std::string init_type) {
       int node_num = layersizes[i];
       double* bias_vector = bias_vectors[i-1];
       for(int j=0;j<node_num;j++) {
-        bias_vector[j] = 0;
+      //  bias_vector[j] = 0;
       }
     }
   }
+  if(init_type == "fromfile") {
+    fin.close();
+  }
+
 }
 
 
@@ -149,6 +170,7 @@ bool NN::Forward(double* input, int batchsize) {
     for(int i=0;i<batchsize;i++) {
       for(int j=0;j<layersizes[layer];j++) {
         int idx = i * layersizes[layer] + j;
+        output[idx] += bias_vectors[layer-1][j];//add bias
         if(layer == layersizes.size()-1) {
           output[idx] = exp(output[idx]);
         }else {
@@ -197,10 +219,12 @@ bool NN::Derivative(double* target, int batchsize) {
     int layersize = layersizes[layer];
     double* factor = error_matrixs[layer-1];
     double* delta = delta_matrixs[layer-1];
+    double* X = layer_values[layer-1];
+    int hidelayer_size = layersizes[layer-1];
+    double* delta_bias = delta + layersize*hidelayer_size;
     if(layer == layersizes.size()-1) {
       for(int i=0;i<batchsize;i++) {
         int t = (int)target[i];
-
         for(int j=0;j<layersize;j++) {
           factor[layersize*i + j] = 0;
         }
@@ -213,21 +237,47 @@ bool NN::Derivative(double* target, int batchsize) {
       double alpha = -1;
       cblas_daxpy(N, alpha, output, 1, factor, 1);
 
-      double* X = layer_values[layer-1];
-      int hidelayer_size = layersizes[layer-1];
+      for(int i=0;i<batchsize;i++) {
+        for(int j=0;j<layersize;j++) {
+          factor[layersize*i+j]/=batchsize;
+        }
+      }
       int weight_idx = layer-1;
-      const int M = layersize;
+      int M = layersize;
       N = hidelayer_size;
-      const int K = batchsize;
-      const int lda = M;
-      const int ldb = N;
-      const int ldc = N;
+      int K = batchsize;
+      int lda = M;
+      int ldb = N;
+      int ldc = N;
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                 M, N, K,
-                1.0, factor, lda,
+                1.0/batchsize, factor, lda,
                 X, ldb,
                 0.0, delta, ldc
                 );
+      for(int i=0;i<layersize;i++) {
+        for(int j=0;j<hidelayer_size;j++ ) {
+          //std::cout<<delta[i*hidelayer_size+j]<<std::endl;
+        }
+      }
+      double* ones = new double[batchsize];
+      for(int i=0;i<batchsize;i++) {
+        ones[i] = 1.0;
+      }
+      M = layersize;
+      N = 1;
+      K = batchsize;
+      lda = M;
+      ldb = N;
+      ldc = N;
+      cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
+                  M, N, K,
+                  1.0/batchsize, factor, lda,
+                  ones, ldb,
+                  0.0, delta_bias,ldc
+                 );
+      delete [] ones;
+
     } else {
 
       int weight_idx = layer-1;
@@ -238,25 +288,30 @@ bool NN::Derivative(double* target, int batchsize) {
       int N = layersize;
       int K = downstream_layersize;
       int lda = K;
-      int ldb = K;
+      int ldb = N;//之前这里是N
       int ldc = N;
 
-      cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+      cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,//之前这里是trans， notrans
                   M, N, K,
-                  -1.0, downstream_factor, lda,
+                  1.0, downstream_factor, lda,
                   downstream_weight, ldb,
                   0.0, factor, ldc
                  );//把下游的误差，通过权值累加到这一层
+      for(int i=0;i<batchsize;i++) {
+        for(int j=0;j<layersize;j++) {
+//         std::cout<<factor[i*layersize+j]<<std::endl;
+//          factor[i*layersize+j]/=batchsize;
+        }
+      }
       double* O = layer_values[layer];
-
       for(int i=0;i<batchsize;i++) {
         for(int j=0;j<layersize;j++) {
           int idx=i*layersize+j;
           factor[idx]=factor[idx]*O[idx]*(1-O[idx]);
+          //计算sigmoid层的梯度
         }
       }
-      double* X = layer_values[layer-1];
-      int hidelayer_size = layersizes[layer-1];
+
       M = layersize;
       N = hidelayer_size;
       K = batchsize;
@@ -266,23 +321,66 @@ bool NN::Derivative(double* target, int batchsize) {
 
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                   M, N, K,
-                  -1.0, factor, lda,
+                  1.0/batchsize, factor, lda,
                   X, ldb,
                   0.0, delta, ldc
-                  );
-    }
+                 );
 
-    int hidelayer_size=layersizes[layer-1];
+      double* ones = new double[batchsize];
+      for(int i=0;i<batchsize;i++) {
+        ones[i]=1.0;
+      }
+      M = layersize;
+      N = 1;
+      K = batchsize;
+      lda = M;
+      ldb = N;
+      ldc = N;
+      cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
+                  M, N, K,
+                  1.0/batchsize, factor, lda,
+                  ones, ldb,
+                  0.0, delta_bias, ldc
+                 );
+
+      delete [] ones;
+    }
+  }
+
+  std::ofstream delta_fout("data/unittest.delta");
+  for(unsigned int i=0;i<delta_matrixs.size();i++) {
+    int node_num = layersizes[i+1];
+    int input_num = layersizes[i];
+    int weight_num = (1+input_num)*node_num;
+    std::cout<<"weightNUM:"<<weight_num<<std::endl;
+    for(int j=0;j<weight_num;j++) {
+      delta_fout<<delta_matrixs[i][j]<<std::endl;
+    }
+  }
+  delta_fout.close();
+
+  for(int layer=layersizes.size()-1;layer>=1;layer--){
+    int layersize = layersizes[layer];
+    int hidelayer_size = layersizes[layer-1];
+    double* delta = delta_matrixs[layer-1];
+    double* delta_bias = delta + layersize*hidelayer_size;
     int weight_idx = layer - 1;
     cblas_daxpy(layersize*hidelayer_size, learning_rate, delta, 1,
-                weight_matrixs[weight_idx], 1
+               weight_matrixs[weight_idx], 1
                );
+    cblas_daxpy(layersize, learning_rate, delta_bias, 1,
+                bias_vectors[weight_idx], 1
+                );
+
   }
   return true;
 }
 
-bool NN::Train(double* feature, double* target, int instancenum) {
+bool NN::Train(DataSet* trainData) {
   int epoch = 0;
+  double* feature = trainData->feature;
+  double* target = trainData->target;
+  int instancenum = trainData->length;
   while(true) {
     std::cout<<"epoch:"<<epoch++<<std::endl;
     for(int i=0;i<instancenum;i+=minibatchsize) {
@@ -304,50 +402,33 @@ bool NN::Train(double* feature, double* target, int instancenum) {
   }
   return true;
 }
-/*
+
 void NN::CompareWithTorch() {
-  std::ifstream weight_fin("data/weight.txt");
-  std::ifstream input_fin("data/input.txt");
-  std::ifstream target_fin("data/target.txt");
+//  std::ifstream weight_fin("data/weight.txt");
+  int test_size = 10;
+  std::ifstream input_fin("data/unittest.dat");
   std::string line;
   std::vector<std::string> parts;
   //std::cout<<"minibatchsize:"<<minibatchsize<<std::endl;
-  double* input = new double[minibatchsize*inputsize];
-  double* target = new double[minibatchsize];
-  for(int i=0;i<minibatchsize;i++) {
+  double* input = new double[test_size*inputsize];
+  double* target = new double[test_size];
+  for(int i=0;i<test_size;i++) {
     getline(input_fin, line);
     boost::trim(line);
     boost::split(parts, line, boost::is_any_of(" "));
-    if(parts.size()!=inputsize) {
-      //LOG(ERROR)<<"input file error";
-    }
+    target[i] = boost::lexical_cast<double>(parts[0]) - 1;
     for(int j=0;j<inputsize;j++) {
       int idx = i * inputsize + j;
-      input[idx] = boost::lexical_cast<double>(parts[j]);
+      input[idx] = boost::lexical_cast<double>(parts[j+1]);
     }
   }
-   for(int i=0;i<minibatchsize;i++) {
-    getline(target_fin, line);
-    boost::trim(line);
-    target[i] = boost::lexical_cast<double>(line);
-  }
-
-  std::cout<<"load weight"<<std::endl;
-  for(int layer=1;layer<layersizes.size();layer++) {
-    double* weight = weight_matrixs[layer-1];
-    int weight_length = layersizes[layer-1] * layersizes[layer];
-    for(int j=0;j<weight_length;j++) {
-      getline(weight_fin, line);
-      weight[j] = boost::lexical_cast<double>(line);
-    }
-  }
-  weight_fin.close();
+  std::cout<<"init weight from file ... "<<std::endl;
+  InitWeight("fromfile");
   input_fin.close();
-  target_fin.close();
-  Forward(input);
+  Forward(input, 10);
   double* output = GetOutput();
   std::cout<<"Compare With Torch"<<std::endl;
-  for(int i=0;i<GetMiniBatchSize();i++) {
+  for(int i=0;i<test_size;i++) {
     for(int j=0;j<GetOutputSize();j++) {
       int idx = i*GetOutputSize() + j;
       std::cout<<output[idx]<<" ";
@@ -355,12 +436,12 @@ void NN::CompareWithTorch() {
     std::cout<<std::endl;
   }
   //  LogLoss(target);
-  for(int i=0;i<10000;i++) {
-    Forward(input);
-    Derivative(target);
-  }
+//  for(int i=0;i<10000;i++) {
+//    Forward(input, 9);
+   Derivative(target, 10);
+//  }
 }
-*/
+
 
 bool NN::LogLoss(double* feature, double* target, double &logloss, int instancenum) {
   //call LogLoss after calling Forward
@@ -412,6 +493,7 @@ bool NN::LogLoss(double* feature, double* target, double &logloss, int instancen
                );
       logloss+=logloss_tmp[0];
   }
+  std::cout<<"instancenum:"<<instancenum<<std::endl;
   logloss/=instancenum;
   logloss = -logloss;
   delete [] logloss_tmp;
