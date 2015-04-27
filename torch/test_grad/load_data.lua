@@ -1,10 +1,10 @@
 require 'torch'
 require 'nn'
-train_file = 'train.t7'
+train_file = '../../data/train.t7'
 
 trainData = torch.load(train_file)
-trainData.data = trainData.data:sub(1,10)
-trainData.labels = trainData.labels:sub(1,10)
+trainData.data=trainData.data:sub(1,10)
+trainData.labels=trainData.labels:sub(1,10)
 print(trainData.labels)
 print(trainData)
 --fid=io.open('../../data/unittest.dat', 'w')
@@ -19,4 +19,5 @@ print(trainData)
 --end
 trsize = (#trainData.labels)[1]
 print('trsize:', trsize)
+
 --fid:close()
