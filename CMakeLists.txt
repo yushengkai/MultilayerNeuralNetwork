@@ -21,9 +21,16 @@ SET_TARGET_PROPERTIES(softmax PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE
 
 aux_source_directory(./src/nn/main TRAIN_SRCS)
 aux_source_directory(./src/nn/net TRAIN_SRCS)
+aux_source_directory(./src/nn/tool TRAIN_SRCS)
+aux_source_directory(./src/nn/solver TRAIN_SRCS)
 ADD_EXECUTABLE(train ${TRAIN_SRCS})
 TARGET_LINK_LIBRARIES(train ${LIBS})
 SET_TARGET_PROPERTIES(train PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
-
+aux_source_directory(./src/nn/net TEST_SRCS)
+aux_source_directory(./src/nn/tool TEST_SRCS)
+aux_source_directory(./src/nn/solver TEST_SRCS)
+ADD_EXECUTABLE(all_test ${TEST_SRCS} src/nn/test/all_test.cc)
+TARGET_LINK_LIBRARIES(all_test ${LIBS})
+SET_TARGET_PROPERTIES(all_test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
