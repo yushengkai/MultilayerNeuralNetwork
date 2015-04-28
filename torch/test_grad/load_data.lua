@@ -1,23 +1,18 @@
 require 'torch'
 require 'nn'
-train_file = '../../data/train.t7'
 
-trainData = torch.load(train_file)
-trainData.data=trainData.data:sub(1,10)
-trainData.labels=trainData.labels:sub(1,10)
-print(trainData.labels)
-print(trainData)
---fid=io.open('../../data/unittest.dat', 'w')
---for i=1,10 do
---    fid:write(tostring(trainData.labels[i]))
---    fid:write(" ")
---    for j=1,784 do
---        fid:write(tostring(trainData.data[i][j]))
---        fid:write(" ")
---    end
---    fid:write('\n')
---end
-trsize = (#trainData.labels)[1]
-print('trsize:', trsize)
+trainData = {data=torch.Tensor(10,784), labels=torch.Tensor(10)}
+fid=io.open('../../data/unittest.dat', 'r')
+for i=1,10 do
+    line=fid:read('*l')
+    idx=0
+    for item in string.gmatch(line, "%d+") do
+        if idx==0 then
+            trainData.labels[i]=tonumber(item)
+        else
+            trainData.data[i][idx]=tonumber(item)
+        end
+        idx=idx+1
+    end
+end
 
---fid:close()
