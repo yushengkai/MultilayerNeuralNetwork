@@ -7,7 +7,8 @@ softmax.cc也是一个单独的文件，是写了一个简单的softmax.cc回归
 测试过程:
 1.在torch/test_grad目录里面运行th doall.lua，会读取data目录里面的train.t7作为输入，
 weight.txt作为初始化权重，然后在data目录里面生成它迭代一次的梯度，输出值，和更新
-之后的权重，文件名分别是unittest.grad, unittest.output, unittest.update。
+之后的权重，文件名分别是unittest.grad, unittest.output, unittest.update.
+然后运行./bin/all_test，会进行单元测试
 ====================================================================
 Training process starts from train.cc which invokes NN.h and LookupTable.h
 main.cc is a code file which contain all classes and function. It hasn't been Encapsulated.MultilayerNeuralNetwork is similar to it.
