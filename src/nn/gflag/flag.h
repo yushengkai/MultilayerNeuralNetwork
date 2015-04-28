@@ -20,8 +20,5 @@ DECLARE_double(learning_rate);
 DECLARE_bool(logtostderr);
 DECLARE_int32(test_batchsize);
 
-
-
-
 #endif  // FLAG_H_
 
