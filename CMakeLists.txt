@@ -19,7 +19,7 @@ ADD_EXECUTABLE(softmax ${SRC_ROOT}/test/softmax.cc)
 TARGET_LINK_LIBRARIES(softmax ${LIBS})
 SET_TARGET_PROPERTIES(softmax PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
-aux_source_directory(./src/nn/main TRAIN_SRCS)
+aux_source_directory(./src/nn/train TRAIN_SRCS)
 aux_source_directory(./src/nn/net TRAIN_SRCS)
 aux_source_directory(./src/nn/tool TRAIN_SRCS)
 aux_source_directory(./src/nn/solver TRAIN_SRCS)
