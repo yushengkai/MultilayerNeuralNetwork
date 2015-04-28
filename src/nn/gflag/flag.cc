@@ -1,5 +1,5 @@
 // Copyright (c) 2015 Qihoo 360 Technology Co. Ltd
-// Author: Mu Yixiang (muyixiang@360.cn)
+// Author: Yu Shengkai (yushengkai@360.cn)
 #include <gflags/gflags.h>
 #include "gflag/flag.h"
 
