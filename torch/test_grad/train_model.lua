@@ -21,8 +21,6 @@ if not opt then
 		opt = cmd:parse(arg or {})
 end
 
-
-
 if model then
 	parameters,gradParameters = model:getParameters()
 --   print(parameters, gradParameters)
@@ -80,7 +78,7 @@ function train()
 				local f = 0
 
 				-- evaluate function for complete mini batch
-				
+
 				for i = 1,#inputs do
 				-- estimate f
 				--	print(targets[i])
@@ -99,8 +97,8 @@ function train()
 		-- normalize gradients and f(X)
 				gradParameters:div(#inputs)
 				f = f/#inputs
-				
-				
+
+
 		-- return f and df/dX
 				return f,gradParameters
 			end--function
@@ -138,9 +136,9 @@ function train()
 	end
 	print('right:',right)
 	print('last_right', last_right)
-	epoch=epoch+1     	   
+	epoch=epoch+1
 	--coufusion:zero()
-	
+
 	if right>last_right then
 		last_right=right
 		return true
