@@ -18,13 +18,14 @@ TEST(DeltaTest, TestCase) {
   if(lookup_table->Init(FLAGS_lookup_table_param, FLAGS_lookup_table_width)) {
 
   }
-
   NN* nn = new NN();
   nn->Init(lookup_table, FLAGS_nn_param, FLAGS_minibatchsize,
            FLAGS_init_type, FLAGS_with_bias, FLAGS_learning_rate);
+
   nn->CompareWithTorch();
   std::vector<double*> delta_matrixs = nn->delta_matrixs;
   std::ifstream fin("data/unittest.grad");
+  EXPECT_TRUE(fin!=NULL);
   std::string line="";
   for(int layer=1;layer<nn->layersizes.size();layer++) {
     int node_num = nn->layersizes[layer];
@@ -41,6 +42,7 @@ TEST(DeltaTest, TestCase) {
     for(int i=0;i<node_num;i++) {
       getline(fin, line);
       boost::trim(line);
+
       double torch_grad = boost::lexical_cast<double>(line);
       double my_grad = delta_bias[i];
       EXPECT_NEAR(torch_grad, my_grad, 1e-6);
@@ -62,6 +64,7 @@ TEST(ForwardTest, TestCase) {
   nn->CompareWithTorch();
   std::vector<double*> delta_matrixs = nn->delta_matrixs;
   std::ifstream fin("data/unittest.output");
+  EXPECT_TRUE(fin!=NULL);
   std::string line="";
   output = nn->nn_output;
 
@@ -88,6 +91,7 @@ TEST(UpdateTest, TestCase) {
   nn->CompareWithTorch();
   std::vector<double*> delta_matrixs = nn->delta_matrixs;
   std::ifstream fin("data/weight.update");
+  EXPECT_TRUE(fin!=NULL);
   std::string line="";
   output = nn->nn_output;
  int idx=0;
