@@ -56,7 +56,7 @@ function test_grad()
                 -- estimate f
             local output = model:forward(inputs)
             tmp = torch.exp(output)
-            fid = io.open('../../data/unittest.output', 'w')
+            fid = io.open('../data/unittest.output', 'w')
             for i=1,(#tmp)[1] do
                 for j=1,(#tmp)[2] do
                     fid:write(tostring(tmp[i][j]) .. '\n')
@@ -73,7 +73,7 @@ function test_grad()
 		-- normalize gradients and f(X)
 		    gradParameters:div((#inputs)[1])
             f = f/(#inputs)[1]
-            fid = io.open('../../data/unittest.grad', 'w')
+            fid = io.open('../data/unittest.grad', 'w')
             for i=1, (#gradParameters)[1] do
                 fid:write(tostring(gradParameters[i]))
                 fid:write('\n')
@@ -85,7 +85,7 @@ function test_grad()
 		end--function
 
         f, gradParameters = optimMethod(feval, parameters, optimState)
-        local fid=io.open("../../data/weight.update", "w")
+        local fid=io.open("../data/weight.update", "w")
 
         for i=1,4,2 do
             weight = model:get(i).weight
