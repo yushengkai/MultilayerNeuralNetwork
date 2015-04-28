@@ -43,7 +43,6 @@ TEST(DeltaTest, TestCase) {
       boost::trim(line);
       double torch_grad = boost::lexical_cast<double>(line);
       double my_grad = delta_bias[i];
-      if(layer==2)
       EXPECT_NEAR(torch_grad, my_grad, 1e-6);
     }
   }
