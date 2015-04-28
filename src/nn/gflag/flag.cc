@@ -17,5 +17,3 @@ DEFINE_double(learning_rate, 0.001, "learning rate");
 DEFINE_bool(logtostderr, false, "log into stderr");
 DEFINE_int32(test_batchsize, 10, "test batchsize");
 
-
-
