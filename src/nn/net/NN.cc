@@ -21,8 +21,8 @@ boost::variate_generator<boost::mt19937&, boost::normal_distribution<double> >
 normal_sample1(rng, norm_dist1);
 
 bool NN::Init(LookupTable * lookup_table, std::string param,
-              int m, std::string init_type, bool wb) {
-  learning_rate = 0.005;
+              int m, std::string init_type, bool wb, double l) {
+  learning_rate = l;
   with_bias=wb;
   minibatchsize = m;
   softmax_sum = new double[minibatchsize];
@@ -31,13 +31,12 @@ bool NN::Init(LookupTable * lookup_table, std::string param,
   boost::trim(param);
   std::vector<std::string> parts;
   boost::split(parts, param, boost::is_any_of(":"));
-  std::cout<<"nn layers:"<<inputsize;
+ // std::cout<<"nn layers:"<<inputsize;
   for(unsigned int i=0;i<parts.size();i++) {
     int value = boost::lexical_cast<int>(parts[i]);
     if(value<=0) {
       return false;
     }
-    std::cout<<"->"<<value;
     layersizes.push_back(value);
   }
   outputsize = layersizes.back();
@@ -69,7 +68,7 @@ bool NN::Init(LookupTable * lookup_table, std::string param,
 
   nn_output = layer_values.back();
   InitWeight(init_type);
-  LOG(INFO)<<"Initialization finished ...";
+  //LOG(INFO)<<"Initialization finished ...";
   return true;
 }
 
@@ -78,7 +77,7 @@ void NN::InitWeight(std::string init_type) {
   std::ifstream fin;
   if(init_type == "fromfile") {
     fin.open("data/weight.txt");
-    std::cout<<"init weight from data/weight.txt"<<std::endl;
+//    std::cout<<"init weight from data/weight.txt"<<std::endl;
   }
 
   for(unsigned int i=1;i<layersizes.size();i++) {
@@ -251,7 +250,7 @@ bool NN::Derivative(double* target, int batchsize) {
       int ldc = N;
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                 M, N, K,
-                1.0/batchsize, factor, lda,
+                -1.0/batchsize, factor, lda,
                 X, ldb,
                 0.0, delta, ldc
                 );
@@ -272,7 +271,7 @@ bool NN::Derivative(double* target, int batchsize) {
       ldc = N;
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                   M, N, K,
-                  1.0/batchsize, factor, lda,
+                  -1.0/batchsize, factor, lda,
                   ones, ldb,
                   0.0, delta_bias,ldc
                  );
@@ -321,7 +320,7 @@ bool NN::Derivative(double* target, int batchsize) {
 
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                   M, N, K,
-                  1.0/batchsize, factor, lda,
+                  -1.0/batchsize, factor, lda,
                   X, ldb,
                   0.0, delta, ldc
                  );
@@ -338,7 +337,7 @@ bool NN::Derivative(double* target, int batchsize) {
       ldc = N;
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                   M, N, K,
-                  1.0/batchsize, factor, lda,
+                  -1.0/batchsize, factor, lda,
                   ones, ldb,
                   0.0, delta_bias, ldc
                  );
@@ -352,7 +351,6 @@ bool NN::Derivative(double* target, int batchsize) {
     int node_num = layersizes[i+1];
     int input_num = layersizes[i];
     int weight_num = (1+input_num)*node_num;
-    std::cout<<"weightNUM:"<<weight_num<<std::endl;
     for(int j=0;j<weight_num;j++) {
       delta_fout<<delta_matrixs[i][j]<<std::endl;
     }
@@ -365,10 +363,10 @@ bool NN::Derivative(double* target, int batchsize) {
     double* delta = delta_matrixs[layer-1];
     double* delta_bias = delta + layersize*hidelayer_size;
     int weight_idx = layer - 1;
-    cblas_daxpy(layersize*hidelayer_size, learning_rate, delta, 1,
+    cblas_daxpy(layersize*hidelayer_size, -learning_rate, delta, 1,
                weight_matrixs[weight_idx], 1
                );
-    cblas_daxpy(layersize, learning_rate, delta_bias, 1,
+    cblas_daxpy(layersize, -learning_rate, delta_bias, 1,
                 bias_vectors[weight_idx], 1
                 );
 
@@ -404,7 +402,6 @@ bool NN::Train(DataSet* trainData) {
 }
 
 void NN::CompareWithTorch() {
-//  std::ifstream weight_fin("data/weight.txt");
   int test_size = 10;
   std::ifstream input_fin("data/unittest.dat");
   std::string line;
@@ -422,24 +419,11 @@ void NN::CompareWithTorch() {
       input[idx] = boost::lexical_cast<double>(parts[j+1]);
     }
   }
-  std::cout<<"init weight from file ... "<<std::endl;
   InitWeight("fromfile");
   input_fin.close();
   Forward(input, 10);
   double* output = GetOutput();
-  std::cout<<"Compare With Torch"<<std::endl;
-  for(int i=0;i<test_size;i++) {
-    for(int j=0;j<GetOutputSize();j++) {
-      int idx = i*GetOutputSize() + j;
-      std::cout<<output[idx]<<" ";
-    }
-    std::cout<<std::endl;
-  }
-  //  LogLoss(target);
-//  for(int i=0;i<10000;i++) {
-//    Forward(input, 9);
-   Derivative(target, 10);
-//  }
+  Derivative(target, 10);
 }
 
 

@@ -14,7 +14,6 @@ class NN {
   int inputsize;
   int outputsize;
   int minibatchsize;
-  double* nn_output;
   double* softmax_sum;
   bool with_bias;
   double learning_rate;
@@ -25,15 +24,16 @@ class NN {
   std::vector<double*> layer_values;
   std::vector<double*> delta_matrixs;
   std::vector<double*> error_matrixs;
+  double* nn_output;
   NN(){}
   bool Init(LookupTable *lookup_table, std::string param,
-            int m, std::string init_type, bool wb);
+            int m, std::string init_type, bool wb, double l);
   bool Forward(double* input, int batchsize);
   bool LogLoss(double* feature, double* target, double &logloss, int instancenum);
   bool Derivative(double* target, int batchsize);
   bool Train(DataSet* trainData);
   void InitWeight(std::string init_type);
-  int GetMiniBatchSize(){return minibatchsize;}
+  int GetMinibatchSize(){return minibatchsize;}
   int GetOutputSize(){return outputsize;}
   int GetInputSize(){return inputsize;}
   double* GetOutput(){return nn_output;}
