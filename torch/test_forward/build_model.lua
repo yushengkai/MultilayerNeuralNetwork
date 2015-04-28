@@ -12,7 +12,7 @@ mlp:add(nn.Sigmoid())
 mlp:add(nn.Linear(layer1,noutput))
 mlp:add(nn.SoftMax())
 print(mlp)
-local fid=io.open("../../data/weight.txt", "w")
+local fid=io.open("../../data/weight.txt", "r")
 assert(fid)
 idx=0
 for i=1,4,2 do
@@ -22,7 +22,8 @@ for i=1,4,2 do
     for n=1,(#weight)[1] do
         for w=1,(#weight)[2] do
             idx=idx+1
-            fid:write(weight[n][w])
+            line=fid:read('*l')
+            weight[n][w]=tonumber();
             --print(idx, weight[n][w])
             fid:write('\n')
         end

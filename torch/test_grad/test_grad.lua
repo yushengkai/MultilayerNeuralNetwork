@@ -11,7 +11,7 @@ if not opt then
 		cmd:option('-visualize', false, 'visualize input data and weights during training')
 		cmd:option('-plot', false, 'live plot')
 		cmd:option('-optimization', 'SGD', 'optimization method: SGD | ASGD | CG | LBFGS')
-		cmd:option('-learningRate', 1, 'learning rate at t=0')
+		cmd:option('-learningRate', 1e-3, 'learning rate at t=0')
 		cmd:option('-batchSize', 1, 'mini-batch size (1 = pure stochastic)')
 		cmd:option('-weightDecay', 0, 'weight decay (SGD only)')
 		cmd:option('-momentum', 0, 'momentum (SGD only)')
@@ -54,8 +54,15 @@ function test_grad()
 				-- evaluate function for complete mini batch
 
                 -- estimate f
-                local output = model:forward(inputs)
-                print(torch.exp(output))
+            local output = model:forward(inputs)
+            tmp = torch.exp(output)
+            fid = io.open('../../data/unittest.output', 'w')
+            for i=1,(#tmp)[1] do
+                for j=1,(#tmp)[2] do
+                    fid:write(tostring(tmp[i][j]) .. '\n')
+                end
+            end
+            fid:close()
 			local err = criterion:forward(output, targets)
 				-- estimate df/dW
 			local df_do = criterion:backward(output, targets)
@@ -67,8 +74,7 @@ function test_grad()
 		    gradParameters:div((#inputs)[1])
             f = f/(#inputs)[1]
             fid = io.open('../../data/unittest.grad', 'w')
-            start_idx=784*200
-            for i=1, 784*200 do
+            for i=1, (#gradParameters)[1] do
                 fid:write(tostring(gradParameters[i]))
                 fid:write('\n')
             end
@@ -79,5 +85,22 @@ function test_grad()
 		end--function
 
         f, gradParameters = optimMethod(feval, parameters, optimState)
+        local fid=io.open("../../data/weight.update", "w")
+
+        for i=1,4,2 do
+            weight = model:get(i).weight
+            bias = model:get(i).bias
+            for n=1,(#weight)[1] do
+                for w=1,(#weight)[2] do
+                    fid:write(tostring(weight[n][w])..'\n')
+                end
+            end
+            for n=1, (#bias)[1] do
+                fid:write(tostring(bias[n])..'\n')
+            end
+        end
+        fid:close()
+
+
 end
 test_grad()
