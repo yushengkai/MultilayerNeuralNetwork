@@ -38,7 +38,7 @@ if opt.model == 'mlp' then
 
 	-- This matrix records the current confusion across classes
 	confusion = optim.ConfusionMatrix(classes)
-    local fid=io.open("../../data/weight.txt", "r")
+    local fid=io.open("../data/weight.txt", "r")
 
     for i=1,4,2 do
         weight = model:get(i).weight
@@ -121,7 +121,7 @@ elseif opt.model == 'cnn' then
 
       	-- stage 3 : standard 2-layer neural network
       --	model:add(nn.Reshape((filtsize-1)*(filtsize-1)))
-	model:add(nn.View(nstates[2]*(filtsize-1)*(filtsize-1)))
+	    model:add(nn.View(nstates[2]*(filtsize-1)*(filtsize-1)))
      	model:add(nn.Linear(nstates[2]*(filtsize-1)*(filtsize-1),nstates[3]))
 	--model:add(nn.Dropout(0.5))
       	model:add(nn.Sigmoid())
