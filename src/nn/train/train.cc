@@ -6,7 +6,7 @@
 #include "net/NN.h"
 #include "tool/util.h"
 #include "solver/sgd.h"
-
+/*
 DEFINE_string(lookup_table_param, "10:20:30:40", "lengths of lookup tables");
 DEFINE_int32(lookup_table_width, 196, "width of all the lookup tables");
 DEFINE_int32(minibatchsize, 50, "minibatchsize");
@@ -19,6 +19,22 @@ DEFINE_string(tranfer_func, "sigmoid", "sigmoid, tanh, ReLU");
 DEFINE_string(log_dir, "./log", "log dir");
 DEFINE_double(learning_rate, 0.001, "learning rate");
 DEFINE_bool(logtostderr, true, "log into stderr");
+*/
+
+
+DECLARE_string(lookup_table_param);
+DECLARE_int32(lookup_table_width);
+DECLARE_int32(minibatchsize);
+DECLARE_double(sigma);
+DECLARE_double(mu);
+DECLARE_string(init_type);
+DECLARE_string(nn_param);
+DECLARE_bool(with_bias);
+DECLARE_string(tranfer_func);
+DECLARE_string(log_dir);
+DECLARE_double(learning_rate);
+DECLARE_bool(logtostderr);
+
 
 int main(int argc, char* argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
@@ -31,7 +47,8 @@ int main(int argc, char* argv[]) {
   }
 
   NN* nn = new NN();
-  nn->Init(lookup_table, FLAGS_nn_param, FLAGS_minibatchsize, FLAGS_init_type, FLAGS_with_bias);
+  nn->Init(lookup_table, FLAGS_nn_param, FLAGS_minibatchsize,
+           FLAGS_init_type, FLAGS_with_bias, FLAGS_learning_rate);
   int featuresize;
   int instancenum;
   double* feature = NULL;
