@@ -31,7 +31,6 @@ bool NN::Init(LookupTable * lookup_table, std::string param,
   boost::trim(param);
   std::vector<std::string> parts;
   boost::split(parts, param, boost::is_any_of(":"));
- // std::cout<<"nn layers:"<<inputsize;
   for(unsigned int i=0;i<parts.size();i++) {
     int value = boost::lexical_cast<int>(parts[i]);
     if(value<=0) {
@@ -68,7 +67,6 @@ bool NN::Init(LookupTable * lookup_table, std::string param,
 
   nn_output = layer_values.back();
   InitWeight(init_type);
-  //LOG(INFO)<<"Initialization finished ...";
   return true;
 }
 
@@ -254,11 +252,6 @@ bool NN::Derivative(double* target, int batchsize) {
                 X, ldb,
                 0.0, delta, ldc
                 );
-      for(int i=0;i<layersize;i++) {
-        for(int j=0;j<hidelayer_size;j++ ) {
-          //std::cout<<delta[i*hidelayer_size+j]<<std::endl;
-        }
-      }
       double* ones = new double[batchsize];
       for(int i=0;i<batchsize;i++) {
         ones[i] = 1.0;
@@ -292,16 +285,10 @@ bool NN::Derivative(double* target, int batchsize) {
 
       cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,//之前这里是trans， notrans
                   M, N, K,
-                  1.0, downstream_factor, lda,
+                  1.0/batchsize, downstream_factor, lda,
                   downstream_weight, ldb,
                   0.0, factor, ldc
                  );//把下游的误差，通过权值累加到这一层
-      for(int i=0;i<batchsize;i++) {
-        for(int j=0;j<layersize;j++) {
-//         std::cout<<factor[i*layersize+j]<<std::endl;
-//          factor[i*layersize+j]/=batchsize;
-        }
-      }
       double* O = layer_values[layer];
       for(int i=0;i<batchsize;i++) {
         for(int j=0;j<layersize;j++) {
@@ -320,7 +307,7 @@ bool NN::Derivative(double* target, int batchsize) {
 
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                   M, N, K,
-                  -1.0/batchsize, factor, lda,
+                  -1.0, factor, lda,
                   X, ldb,
                   0.0, delta, ldc
                  );
@@ -337,7 +324,7 @@ bool NN::Derivative(double* target, int batchsize) {
       ldc = N;
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                   M, N, K,
-                  -1.0/batchsize, factor, lda,
+                  -1.0, factor, lda,
                   ones, ldb,
                   0.0, delta_bias, ldc
                  );
@@ -345,17 +332,6 @@ bool NN::Derivative(double* target, int batchsize) {
       delete [] ones;
     }
   }
-
-  std::ofstream delta_fout("data/unittest.delta");
-  for(unsigned int i=0;i<delta_matrixs.size();i++) {
-    int node_num = layersizes[i+1];
-    int input_num = layersizes[i];
-    int weight_num = (1+input_num)*node_num;
-    for(int j=0;j<weight_num;j++) {
-      delta_fout<<delta_matrixs[i][j]<<std::endl;
-    }
-  }
-  delta_fout.close();
 
   for(int layer=layersizes.size()-1;layer>=1;layer--){
     int layersize = layersizes[layer];
@@ -369,7 +345,6 @@ bool NN::Derivative(double* target, int batchsize) {
     cblas_daxpy(layersize, -learning_rate, delta_bias, 1,
                 bias_vectors[weight_idx], 1
                 );
-
   }
   return true;
 }
@@ -402,7 +377,7 @@ bool NN::Train(DataSet* trainData) {
 }
 
 void NN::CompareWithTorch() {
-  int test_size = 10;
+  int test_size = 9;
   std::ifstream input_fin("data/unittest.dat");
   std::string line;
   std::vector<std::string> parts;
@@ -421,9 +396,9 @@ void NN::CompareWithTorch() {
   }
   InitWeight("fromfile");
   input_fin.close();
-  Forward(input, 10);
+  Forward(input, test_size);
   double* output = GetOutput();
-  Derivative(target, 10);
+  Derivative(target, test_size);
 }
 
 
