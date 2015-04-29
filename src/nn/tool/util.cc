@@ -37,8 +37,6 @@ bool ReadMNIST(std::string filename, DataSet* dataset) {
   std::string line;
   getline(fin, line);
   while(getline(fin ,line)) {
-    //std::cout<<line<<std::endl;
-    boost::trim(line);
     count++;
   }
   instancenum = count;
@@ -65,6 +63,59 @@ bool ReadMNIST(std::string filename, DataSet* dataset) {
   dataset->length = instancenum;
   dataset->width = featuresize;
   return true;
+}
+
+bool ReadSparseData(std::string filename, SparseDataSet* dataset) {
+  double** feature;
+  double* target;
+  int* width;
+  int length;
+  int max_feature_id = 0;
+  int min_feature_id = 999999999;
+  std::ifstream fin(filename.c_str());
+  std::string line;
+  std::vector<std::string> parts;
+  int count = 0;
+  std::cout<<"begin to count dataset"<<std::endl;
+  while(getline(fin, line)) {
+    count++;
+  }
+  fin.clear();
+  fin.seekg(0);
+  feature = new double*[count];
+  target = new double[count];
+  width = new int[count];
+  int idx = 0;
+  std::cout<<"datasize:"<<count<<std::endl;
+  while(getline(fin, line)) {
+    if(idx%1000==0) {
+      std::cout<<idx<<"/"<<count<<"\r";
+      std::cout.flush();
+    }
+    boost::trim(line);
+    boost::split(parts, line, boost::is_any_of(" "));
+    target[idx] = boost::lexical_cast<double>(parts[0]);
+    width[idx] = parts.size() - 1;
+    feature[idx] = new double[width[idx]];
+    for(unsigned int i=1;i<parts.size();i++) {
+      boost::trim(parts[i]);
+      feature[idx][i-1] =
+          boost::lexical_cast<double>(parts[i].substr(0, parts[i].size()-2));
+      if(feature[idx][i] > max_feature_id) {
+        max_feature_id = feature[idx][i];
+      }
+      if(feature[idx][i-1] < min_feature_id) {
+        min_feature_id = feature[idx][i];
+      }
+    }
+    idx++;
+  }
+  fin.close();
+  dataset->feature = feature;
+  dataset->target = target;
+  dataset->width = width;
+  dataset->length = count;
+  dataset->max_featureid = max_feature_id;
 }
 
 

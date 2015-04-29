@@ -15,10 +15,20 @@ typedef struct DataSet {
   int length;
 } DataSet;
 
+typedef struct SparseDataSet {
+  double** feature;
+  double* target;
+  int* width;
+  int length;
+  int max_featureid;
+} SparseDataSet;
+
 double sigmoid(double x);
 double tanha(double );
 double ReLU(double x);
 bool ReadMNIST(std::string filename, DataSet* dataset);
+bool ReadSparseData(std::string filename, SparseDataSet* dataset);
+
 
 /*
 

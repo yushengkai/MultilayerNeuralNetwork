@@ -60,32 +60,47 @@ if opt.model == 'mlp' then
     fid:close()
 
 	print(model)
-elseif opt.model == 'dnn1' then
-	ninput=784
-	layer1=ninput/2
-	layer2=layer1/2
-	layer3=layer2/2
-	noutput=10
-	model=nn.Sequential()
-	model:add(nn.Linear(ninput, layer1))
-	model:add(nn.Dropout(0.5))
-	model:add(nn.Sigmoid())
-	model:add(nn.Linear(layer1, layer2))
-	model:add(nn.Dropout(0.5))
-	model:add(nn.Sigmoid())
-	model:add(nn.Linear(layer2, layer3))
-	model:add(nn.Dropout(0.5))
-	model:add(nn.Sigmoid())
-	model:add(nn.Linear(layer3, noutput))
-	model:add(nn.LogSoftMax())
-	criterion = nn.ClassNLLCriterion()
+elseif opt.model == 'lookuptable' then
+    lw=nn.Sequential()
+    lc=nn.Sequential()
 
-	classes = {'1','2','3','4','5','6','7','8','9','10'}
+    ltw=nn.LookupTable(10000, 50)
+    ltc=nn.LookupTable(5, 5)
 
-	-- This matrix records the current confusion across classes
-	confusion = optim.ConfusionMatrix(classes)
+    lw:add(ltw)
+    lw:add(nn.Sum(1))
 
-	print(model)
+    lc:add(ltc)
+    lc:add(nn.Sum(1))
+
+    pt=nn.ParallelTable()
+    pt:add(lw)
+    pt:add(lc)
+
+    jt=nn.JoinTable(1)
+    rs2=nn.Reshape(55)
+
+    model=nn.Sequential()
+    model:add(pt)
+    model:add(jt)
+    model:add(rs2)
+    model:add(nn.Linear(55,10))
+    model:add(nn.Sigmoid())
+    model:add(nn.Linear(10,2))
+    model:add(nn.LogSoftMax())
+
+
+    output=model:forward{torch.Tensor{5,4,3,1,1}, torch.Tensor{1,2,3,4,5}}
+    print({torch.Tensor{5,4,3,1,1}, torch.Tensor{1,2,3,4,5}})
+    print(model)
+    print(output)
+    target=torch.Tensor{2}
+    print('target:',  target)
+    criterion = nn.ClassNLLCriterion()
+    err = criterion:forward(output, 1)
+    df=criterion:backward(output, 1)
+    print(df)
+
 elseif opt.model =='linear' then
 	ninput=784
 	noutput=10

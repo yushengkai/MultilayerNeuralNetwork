@@ -54,6 +54,11 @@ int main(int argc, char* argv[]) {
   double* feature = NULL;
   double* target = NULL;
   nn->CompareWithTorch();
+  std::string filename = "/data/yushengkai/sparse_dnn/sparse_dnn_train.txt";
+  SparseDataSet* trainData = new SparseDataSet();
+  if(!ReadSparseData(filename, trainData)) {
+    LOG(ERROR)<<"Read Sparse data failed...";
+  }
   /*
   std::string filename = "data/train.csv";
   LOG(INFO)<<"Begin to read train data...";

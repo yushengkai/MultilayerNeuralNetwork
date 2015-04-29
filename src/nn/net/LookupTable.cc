@@ -15,8 +15,6 @@ boost::normal_distribution<double> norm_dist(0, 0.01);
 boost::variate_generator<boost::mt19937&, boost::normal_distribution<double> >
 normal_sample(rng, norm_dist);
 
-
-
 int LookupTable::GetTableWidth() {
   return table_width;
 }
