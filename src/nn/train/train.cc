@@ -55,8 +55,9 @@ int main(int argc, char* argv[]) {
   double* target = NULL;
   nn->CompareWithTorch();
   std::string filename = "/data/yushengkai/sparse_dnn/sparse_dnn_train.txt";
+  std::string binaryname = "/data/yushengkai/sparse_dnn/sparse_dnn_train.bin";
   SparseDataSet* trainData = new SparseDataSet();
-  if(!ReadSparseData(filename, trainData)) {
+  if(!ReadSparseData(filename, binaryname, trainData)) {
     LOG(ERROR)<<"Read Sparse data failed...";
   }
   /*

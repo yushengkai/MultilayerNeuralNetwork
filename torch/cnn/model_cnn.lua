@@ -1,11 +1,23 @@
 require 'torch'
 require 'nn'
 
+tablewidth=50
+tablelength1=150000
+tablelength2=150000
+tablenum = 2
+layer1=tablewidth*tablenum
+layer2=10
+outputsize=2
+
+weightnum=tablelength1*tablewidth + tablelength2*tablewidth +
+(layer1+1)*layer2+(layer2+1)*outputsize
+print('weightnum:', weightnum)
+
 lw=nn.Sequential()
 lc=nn.Sequential()
 
-ltw=nn.LookupTable(10000, 50)
-ltc=nn.LookupTable(5, 5)
+ltw=nn.LookupTable(150000, 50)
+ltc=nn.LookupTable(150000, 50)
 
 lw:add(ltw)
 lw:add(nn.Sum(1))
@@ -18,57 +30,35 @@ pt:add(lw)
 pt:add(lc)
 
 jt=nn.JoinTable(1)
-rs2=nn.Reshape(55)
+rs2=nn.Reshape(100)
 
-mlp=nn.Sequential()
-mlp:add(pt)
-mlp:add(jt)
-mlp:add(rs2)
-mlp:add(nn.Linear(55,10))
-mlp:add(nn.Sigmoid())
-mlp:add(nn.Linear(10,2))
-mlp:add(nn.LogSoftMax())
+model=nn.Sequential()
+model:add(pt)
+model:add(jt)
+model:add(rs2)
+model:add(nn.Linear(100,10))
+model:add(nn.Sigmoid())
+model:add(nn.Linear(10,2))
+model:add(nn.LogSoftMax())
 
 
-output=mlp:forward{torch.Tensor{5,4,3,1,1}, torch.Tensor{1,2,3,4,5}}
-print({torch.Tensor{5,4,3,1,1}, torch.Tensor{1,2,3,4,5}})
-print(mlp)
-print(output)
-target=torch.Tensor{2}
-print('target:',  target)
 criterion = nn.ClassNLLCriterion()
-err = criterion:forward(output, 1)
-df=criterion:backward(output, 1)
-print(df)
+print(model)
+parameters,gradParameters = model:getParameters()
+--fid=io.open('../../data/embedding.weight', 'w')
+--for i=1, (#parameters)[1] do
+--  fid:write(tonumber(parameters[i]),'\n')
+--end
+--fid:close()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-input={{5,4,3,1,1},{1,2,3,4,5}}
---print( input)
-
-input_table={}
-for i=0,10 do
-    table.insert(input_table, input)
+fid=io.open('../../data/embedding.weight', 'r')
+for i=1, (#parameters)[1] do
+    value = fid:read('*l')
+    value = tonumber(value)
+    parameters[i] = value
 end
-input_table=torch.Tensor(input_table)
+fid:close()
 
---mlp:forward(input_table)
 
-parameters,gradParameters = mlp:getParameters()
-print(#gradParameters)
+
+
