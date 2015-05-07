@@ -52,6 +52,9 @@ bool NN::Init(LookupTable* lt, std::string param,
 
     int layer_value_size = minibatchsize * layersizes[i];
     double* layer_value = new double[layer_value_size];
+    for(int j=0;j<layer_value_size;j++) {
+      layer_value[j] = normal_sample1();
+    }
     layer_values.push_back(layer_value);
 
     int node_num = layersizes[i];
@@ -148,7 +151,7 @@ bool NN::LookupFromTable(SparseDataSet* sparse_feature) {
   if(nn_input==NULL) {
     nn_input = new double[inputsize*minibatchsize];
   }
-  for(int i=0;i<inputsize;i++) {
+  for(int i=0;i<inputsize*minibatchsize;i++) {
     nn_input[i] = 0;
   }
   int** feature = sparse_feature->feature;
@@ -405,9 +408,14 @@ bool NN::Derivative(SparseDataSet* dataset) {
                 bias_vectors[weight_idx], 1
                 );
   }
+
   int* width = dataset->width;
   int** instances = dataset->feature;
   int table_width = lookup_table->table_width;
+  for(std::map<int,double*>::iterator iter=embedding_delta.begin();
+      iter!=embedding_delta.end();iter++) {
+    delete [] iter->second;
+  }
   embedding_delta.clear();
   double* delta_sums = delta_x;
   for(int i=0;i<batchsize;i++) {
@@ -438,6 +446,7 @@ bool NN::Derivative(SparseDataSet* dataset) {
     cblas_daxpy(table_width, -learning_rate, delta, 1, feature_ptr, 1);
   }
   return true;
+
 }
 
 bool NN::Train(SparseDataSet* trainData) {
@@ -466,17 +475,17 @@ bool NN::Train(SparseDataSet* trainData) {
       dataset->target = target + i;
       dataset->width = trainData->width + i;
       SparseForward(dataset);
-      Forward(nn_input, batchsize);
       Derivative(dataset);
       delete dataset;
     }
     finish = clock();
     total_time = (double)(finish - start)/CLOCKS_PER_SEC;
-    std::cout<<"total time:"<<total_time<<std::endl<<std::endl;;
-//    double logloss;
-//    LogLoss(trainData, logloss, instancenum);
-//    std::cout<<"LogLoss:"<<logloss<<std::endl;
+    std::cout<<"total time:"<<total_time<<std::endl<<std::endl;
+    double logloss;
+    LogLoss(trainData, logloss, instancenum);
+    std::cout<<"LogLoss:"<<logloss<<std::endl<<std::endl;
   }
+  delete []  lookup_table->central_array;
   return true;
 }
 
@@ -526,10 +535,10 @@ bool NN::LogLoss(SparseDataSet* trainData, double &logloss, int instancenum) {
     SparseDataSet* dataset = new SparseDataSet();
     dataset->length = batchsize;
     dataset->feature = trainData->feature + i;
+    dataset->groupid = trainData->groupid + i;
     dataset->width = trainData->width + i;
     double* target_start_ptr = trainData->target + i;
     SparseForward(dataset);
-    Forward(nn_input, batchsize);
 
     double* y  = layer_values.back();
     for(int b=0;b<batchsize;b++) {
