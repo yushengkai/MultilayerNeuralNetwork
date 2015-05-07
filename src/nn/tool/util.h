@@ -16,7 +16,8 @@ typedef struct DataSet {
 } DataSet;
 
 typedef struct SparseDataSet {
-  double** feature;
+  int** feature;
+  int** groupid;
   double* target;
   int* width;
   int length;
@@ -27,7 +28,9 @@ double sigmoid(double x);
 double tanha(double );
 double ReLU(double x);
 bool ReadMNIST(std::string filename, DataSet* dataset);
-bool ReadSparseData(std::string filename, SparseDataSet* dataset);
+bool ReadSparseData(std::string filename, std::string binaryname, SparseDataSet* dataset);
+bool ReadSparseDataFromBin(std::string binaryname, SparseDataSet* dataset);
+bool DeleteSparseData(SparseDataSet* dataset);
 
 
 /*
