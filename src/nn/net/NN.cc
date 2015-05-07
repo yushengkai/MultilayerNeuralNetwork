@@ -7,6 +7,7 @@
 #include <fstream>
 #include <vector>
 #include <ctime>
+#include <time.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/random.hpp>
@@ -242,9 +243,12 @@ bool NN::Forward(double* input, int batchsize) {
                  );
 
       for(int i=0;i<batchsize;i++) {
+        softmax_sum[i] = 1/softmax_sum[i];
+      }
+      for(int i=0;i<batchsize;i++) {
         for(int j=0;j<layersizes[layer];j++) {
           int idx = i*layersizes[layer]+j;
-          output[idx] = output[idx]/softmax_sum[i];
+          output[idx] = output[idx]*softmax_sum[i];
         }
       }
       delete [] ones;
@@ -401,27 +405,6 @@ bool NN::Derivative(SparseDataSet* dataset) {
                 bias_vectors[weight_idx], 1
                 );
   }
-
-/*    for(int groupid=0;groupid<lookup_table->group_sizes.size();groupid++) {
-    for(int idx=0;idx<lookup_table->group_sizes[groupid];idx++) {
-      int feature_count = lookup_table->feature_id_map[real_featureid];
-      int table_width = lookup_table->table_width;
-      if(feature_count>0) {
-        double* feature_ptr = lookup_table->QueryVector(groupid, idx);
-        double* delta_lookuptable = delta_x + groupid*table_width;
-        cblas_daxpy(table_width, -learning_rate*feature_count, delta_lookuptable, 1,
-                    feature_ptr, 1
-                   );
-        std::cout<<"feature "<<idx<<" count "<<feature_count<<std::endl;
-      }
-      else
-      {
-
-      }
-      real_featureid++;
-    }
-    }*/
-
   int* width = dataset->width;
   int** instances = dataset->feature;
   int table_width = lookup_table->table_width;
@@ -447,79 +430,30 @@ bool NN::Derivative(SparseDataSet* dataset) {
     }
   }
 
-  std::ofstream fout("data/delta.update");
   for(std::map<int, double*>::iterator iter=embedding_delta.begin();
       iter!=embedding_delta.end();iter++) {
     double* delta = iter->second;
     int real_featureid = iter->first;
     double* feature_ptr = lookup_table->central_array + real_featureid*table_width;
-    //std::cout<<"real_featureid:"<<real_featureid<<std::endl;
-    fout<<real_featureid<<":";
-    for(int i=0;i<table_width;i++) {
-      fout<<delta[i]<<" ";
-    }
     cblas_daxpy(table_width, -learning_rate, delta, 1, feature_ptr, 1);
-    fout<<std::endl;
   }
-  fout.close();
-  /*
-  std::ofstream fout("data/delta.test");
-  std::ifstream fin("data/sparse_unittest.delta");
-  std::map<int, int> feature_map = lookup_table->feature_map;
-  for(std::map<int,int>::iterator iter=feature_map.begin();iter!=feature_map.end();
-      iter++) {
-    int featureid = iter->first;
-    //std::cout<<"featureid:"<<featureid<<std::endl;
-    int feature_count = iter->second;
-    int groupid = lookup_table->GroupId(featureid);
-    int table_width = lookup_table->table_width;
-    double* feature_ptr = lookup_table->central_array + featureid*table_width;
-    double* delta_lookuptable = delta_x + groupid*table_width;
-    std::cout<<"groupid:"<<groupid<<std::endl;
-   cblas_daxpy(table_width, -learning_rate*feature_count, delta_lookuptable, 1,
-                    feature_ptr, 1
-               );
-    fout<<featureid<<": ";
-    std::string line;
-    getline(fin, line);
-
-    std::vector<std::string> parts;
-    boost::trim(line);
-    boost::split(parts, line, boost::is_any_of(" "));
-
-    std::cout<<"feature_count:"<<feature_count<<std::endl;
-    for(int i=0;i<50;i++) {
-      boost::trim(parts[i]);
-      double torch_value = boost::lexical_cast<double>(parts[i]);
-      double my_value = delta_lookuptable[i]*feature_count;
-      fout<<my_value<<" ";
-      if(torch_value - my_value > 0.0001 || torch_value - my_value<-0.0001) {
-        std::cout<<featureid<<"\t"<<torch_value<<"\t"<<my_value<<"\t0"<<std::endl;
-      }
-      else
-      {
-        std::cout<<featureid<<"\t"<<torch_value<<"\t"<<my_value<<"\t1"<<std::endl;
-      }
-    }
-    fout<<std::endl;
-
-
-  }
-  fout.close();
-  fin.close();*/
   return true;
 }
 
 bool NN::Train(SparseDataSet* trainData) {
   int epoch = 0;
   int** feature = trainData->feature;
+  int** groupid = trainData->groupid;
   double* target = trainData->target;
   int instancenum = trainData->length;
   while(true) {
+    clock_t start, finish;
+    double total_time;
+    start = clock();
     std::cout<<"epoch:"<<epoch++<<std::endl;
     for(int i=0;i<instancenum;i+=minibatchsize) {
       if(i%1000==0) {
-        std::cout<<i<<"/"<<instancenum<<"\r";
+        std::cout<<i<<"/"<<instancenum<<"\tbatchsize:"<<minibatchsize<<"\r";
         std::cout.flush();
       }
       int batchsize =
@@ -528,15 +462,20 @@ bool NN::Train(SparseDataSet* trainData) {
       SparseDataSet* dataset = new SparseDataSet();
       dataset->length = batchsize;
       dataset->feature = feature + i;
+      dataset->groupid = groupid + i;
+      dataset->target = target + i;
       dataset->width = trainData->width + i;
       SparseForward(dataset);
       Forward(nn_input, batchsize);
       Derivative(dataset);
       delete dataset;
     }
-    double logloss;
-    LogLoss(trainData, logloss, instancenum);
-    std::cout<<"LogLoss:"<<logloss<<std::endl;
+    finish = clock();
+    total_time = (double)(finish - start)/CLOCKS_PER_SEC;
+    std::cout<<"total time:"<<total_time<<std::endl<<std::endl;;
+//    double logloss;
+//    LogLoss(trainData, logloss, instancenum);
+//    std::cout<<"LogLoss:"<<logloss<<std::endl;
   }
   return true;
 }
