@@ -13,6 +13,7 @@
 #include <glog/logging.h>
 
 #include "tool/util.h"
+#include "gflag/flag.h"
 #include "net/NN.h"
 
 static boost::mt19937 rng(static_cast<unsigned>(std::time(0)));
@@ -20,8 +21,9 @@ boost::normal_distribution<double> norm_dist1(0, 0.1);
 boost::variate_generator<boost::mt19937&, boost::normal_distribution<double> >
 normal_sample1(rng, norm_dist1);
 
-bool NN::Init(LookupTable * lookup_table, std::string param,
+bool NN::Init(LookupTable* lt, std::string param,
               int m, std::string init_type, bool wb, double l) {
+  lookup_table = lt;
   learning_rate = l;
   with_bias=wb;
   minibatchsize = m;
@@ -64,7 +66,9 @@ bool NN::Init(LookupTable * lookup_table, std::string param,
     delta_matrixs.push_back(delta);
     error_matrixs.push_back(error);
   }
+  delta_x = new double[inputsize*minibatchsize];
 
+  nn_input = layer_values[0];
   nn_output = layer_values.back();
   InitWeight(init_type);
   return true;
@@ -74,17 +78,26 @@ void NN::InitWeight(std::string init_type) {
 
   std::ifstream fin;
   if(init_type == "fromfile") {
-    fin.open("data/weight.txt");
+    fin.open("data/sparse_unittest.weight");
 //    std::cout<<"init weight from data/weight.txt"<<std::endl;
   }
 
+  std::string line;
+  for(int i=0;i<lookup_table->total_length;i++) {
+    if(init_type == "fromfile") {
+      getline(fin, line);
+      boost::trim(line);
+      double value = boost::lexical_cast<double>(line);
+      lookup_table->central_array[i] = value;
+      //////////////
+    }
+  }
   for(unsigned int i=1;i<layersizes.size();i++) {
     int node_num = layersizes[i];
     int weight_num_of_node = layersizes[i-1];
     int weight_num = node_num * weight_num_of_node;
     double* weight_matrix = weight_matrixs[i-1];
     double* bias_vector = bias_vectors[i-1];
-    std::string line;
    for(int j=0;j<weight_num;j++) {
       if(init_type=="normal")
       {
@@ -122,21 +135,50 @@ void NN::InitWeight(std::string init_type) {
       }
     }
   }
-  if(!with_bias) {
-    for(unsigned int i=1;i<layersizes.size();i++) {
-      int node_num = layersizes[i];
-      double* bias_vector = bias_vectors[i-1];
-      for(int j=0;j<node_num;j++) {
-      //  bias_vector[j] = 0;
-      }
-    }
-  }
   if(init_type == "fromfile") {
     fin.close();
   }
 
 }
+bool NN::LookupFromTable(SparseDataSet* sparse_feature) {
+  if(sparse_feature->length>minibatchsize) {
+    return false;
+  }
+  if(nn_input==NULL) {
+    nn_input = new double[inputsize*minibatchsize];
+  }
+  for(int i=0;i<inputsize;i++) {
+    nn_input[i] = 0;
+  }
+  int** feature = sparse_feature->feature;
+  int* width = sparse_feature->width;
+  int length = sparse_feature->length;
 
+  int N = lookup_table->GetTableWidth();
+
+  for(unsigned int ins=0;ins<length;ins++) {
+    for(unsigned int i=0;i<width[ins];i++) {
+      int featureid = feature[ins][i];
+      int groupid=sparse_feature->groupid[ins][i];
+      double* feature = lookup_table->QueryVector(groupid, featureid);
+      if(feature == NULL) {
+         continue;//如果找不到这个特征，就不找了，这个特征无效
+      }
+      int real_featureid = (feature - lookup_table->central_array)/lookup_table->table_width;
+      double* group_input = nn_input + inputsize*ins + groupid*N;
+      cblas_daxpy(N, 1,feature,1,group_input,1);
+    }
+  }
+  return true;
+}
+
+bool NN::SparseForward(SparseDataSet* sparse_feature) {
+  if(!LookupFromTable(sparse_feature)) {
+    return false;
+  }
+  Forward(nn_input, sparse_feature->length);
+  return true;
+}
 
 bool NN::Forward(double* input, int batchsize) {
   layer_values[0] = input;
@@ -210,8 +252,10 @@ bool NN::Forward(double* input, int batchsize) {
   }
 }
 
-bool NN::Derivative(double* target, int batchsize) {
+bool NN::Derivative(SparseDataSet* dataset) {
 
+  double* target = dataset->target;
+  int batchsize = dataset->length;
   for(int layer=layersizes.size()-1;layer>=1;layer--){
     int layersize = layersizes[layer];
     double* factor = error_matrixs[layer-1];
@@ -234,11 +278,6 @@ bool NN::Derivative(double* target, int batchsize) {
       double alpha = -1;
       cblas_daxpy(N, alpha, output, 1, factor, 1);
 
-      for(int i=0;i<batchsize;i++) {
-        for(int j=0;j<layersize;j++) {
-          factor[layersize*i+j]/=batchsize;
-        }
-      }
       int weight_idx = layer-1;
       int M = layersize;
       N = hidelayer_size;
@@ -248,7 +287,7 @@ bool NN::Derivative(double* target, int batchsize) {
       int ldc = N;
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                 M, N, K,
-                -1.0/batchsize, factor, lda,
+                -1.0, factor, lda,
                 X, ldb,
                 0.0, delta, ldc
                 );
@@ -264,13 +303,13 @@ bool NN::Derivative(double* target, int batchsize) {
       ldc = N;
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                   M, N, K,
-                  -1.0/batchsize, factor, lda,
+                  -1.0, factor, lda,
                   ones, ldb,
                   0.0, delta_bias,ldc
                  );
       delete [] ones;
 
-    } else {
+    } else if(layer>=1) {
 
       int weight_idx = layer-1;
       int downstream_layersize = layersizes[layer+1];
@@ -285,10 +324,11 @@ bool NN::Derivative(double* target, int batchsize) {
 
       cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,//之前这里是trans， notrans
                   M, N, K,
-                  1.0/batchsize, downstream_factor, lda,
+                  1.0, downstream_factor, lda,
                   downstream_weight, ldb,
                   0.0, factor, ldc
                  );//把下游的误差，通过权值累加到这一层
+
       double* O = layer_values[layer];
       for(int i=0;i<batchsize;i++) {
         for(int j=0;j<layersize;j++) {
@@ -328,10 +368,25 @@ bool NN::Derivative(double* target, int batchsize) {
                   ones, ldb,
                   0.0, delta_bias, ldc
                  );
-
+      if(layer == 1) {
+        M = batchsize;
+        N = hidelayer_size;
+        K = layersize;
+        lda = K;
+        ldb = N;
+        ldc = N;
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                    M, N, K,
+                    -1.0, factor, lda,
+                    weight_matrixs[0], ldb,
+                    0.0, delta_x, ldc
+                   );
+      }
       delete [] ones;
     }
   }
+
+
 
   for(int layer=layersizes.size()-1;layer>=1;layer--){
     int layersize = layersizes[layer];
@@ -346,31 +401,141 @@ bool NN::Derivative(double* target, int batchsize) {
                 bias_vectors[weight_idx], 1
                 );
   }
+
+/*    for(int groupid=0;groupid<lookup_table->group_sizes.size();groupid++) {
+    for(int idx=0;idx<lookup_table->group_sizes[groupid];idx++) {
+      int feature_count = lookup_table->feature_id_map[real_featureid];
+      int table_width = lookup_table->table_width;
+      if(feature_count>0) {
+        double* feature_ptr = lookup_table->QueryVector(groupid, idx);
+        double* delta_lookuptable = delta_x + groupid*table_width;
+        cblas_daxpy(table_width, -learning_rate*feature_count, delta_lookuptable, 1,
+                    feature_ptr, 1
+                   );
+        std::cout<<"feature "<<idx<<" count "<<feature_count<<std::endl;
+      }
+      else
+      {
+
+      }
+      real_featureid++;
+    }
+    }*/
+
+  int* width = dataset->width;
+  int** instances = dataset->feature;
+  int table_width = lookup_table->table_width;
+  embedding_delta.clear();
+  double* delta_sums = delta_x;
+  for(int i=0;i<batchsize;i++) {
+    double* delta_sum = delta_sums + i*inputsize;
+    for(int j=0;j<width[i];j++) {
+      int groupid = dataset->groupid[i][j];
+      double* delta_group = delta_sum + table_width*groupid;
+      int featureid = instances[i][j];
+      double* feature = lookup_table->QueryVector(groupid, featureid);
+      int real_featureid = (feature - lookup_table->central_array)/table_width;
+      std::map<int,double*>::iterator iter = embedding_delta.find(real_featureid);
+      if(iter != embedding_delta.end()) {
+        double* feature_delta = embedding_delta[real_featureid];
+        cblas_daxpy(table_width, 1.0, delta_group, 1, feature_delta, 1);
+      } else {
+        double* feature_delta = new double[table_width];
+        cblas_dcopy(table_width, delta_group, 1, feature_delta, 1);
+        embedding_delta[real_featureid] = feature_delta;
+      }
+    }
+  }
+
+  std::ofstream fout("data/delta.update");
+  for(std::map<int, double*>::iterator iter=embedding_delta.begin();
+      iter!=embedding_delta.end();iter++) {
+    double* delta = iter->second;
+    int real_featureid = iter->first;
+    double* feature_ptr = lookup_table->central_array + real_featureid*table_width;
+    //std::cout<<"real_featureid:"<<real_featureid<<std::endl;
+    fout<<real_featureid<<":";
+    for(int i=0;i<table_width;i++) {
+      fout<<delta[i]<<" ";
+    }
+    cblas_daxpy(table_width, -learning_rate, delta, 1, feature_ptr, 1);
+    fout<<std::endl;
+  }
+  fout.close();
+  /*
+  std::ofstream fout("data/delta.test");
+  std::ifstream fin("data/sparse_unittest.delta");
+  std::map<int, int> feature_map = lookup_table->feature_map;
+  for(std::map<int,int>::iterator iter=feature_map.begin();iter!=feature_map.end();
+      iter++) {
+    int featureid = iter->first;
+    //std::cout<<"featureid:"<<featureid<<std::endl;
+    int feature_count = iter->second;
+    int groupid = lookup_table->GroupId(featureid);
+    int table_width = lookup_table->table_width;
+    double* feature_ptr = lookup_table->central_array + featureid*table_width;
+    double* delta_lookuptable = delta_x + groupid*table_width;
+    std::cout<<"groupid:"<<groupid<<std::endl;
+   cblas_daxpy(table_width, -learning_rate*feature_count, delta_lookuptable, 1,
+                    feature_ptr, 1
+               );
+    fout<<featureid<<": ";
+    std::string line;
+    getline(fin, line);
+
+    std::vector<std::string> parts;
+    boost::trim(line);
+    boost::split(parts, line, boost::is_any_of(" "));
+
+    std::cout<<"feature_count:"<<feature_count<<std::endl;
+    for(int i=0;i<50;i++) {
+      boost::trim(parts[i]);
+      double torch_value = boost::lexical_cast<double>(parts[i]);
+      double my_value = delta_lookuptable[i]*feature_count;
+      fout<<my_value<<" ";
+      if(torch_value - my_value > 0.0001 || torch_value - my_value<-0.0001) {
+        std::cout<<featureid<<"\t"<<torch_value<<"\t"<<my_value<<"\t0"<<std::endl;
+      }
+      else
+      {
+        std::cout<<featureid<<"\t"<<torch_value<<"\t"<<my_value<<"\t1"<<std::endl;
+      }
+    }
+    fout<<std::endl;
+
+
+  }
+  fout.close();
+  fin.close();*/
   return true;
 }
 
-bool NN::Train(DataSet* trainData) {
+bool NN::Train(SparseDataSet* trainData) {
   int epoch = 0;
-  double* feature = trainData->feature;
+  int** feature = trainData->feature;
   double* target = trainData->target;
   int instancenum = trainData->length;
   while(true) {
     std::cout<<"epoch:"<<epoch++<<std::endl;
     for(int i=0;i<instancenum;i+=minibatchsize) {
       if(i%1000==0) {
-        std::cout<<i<<"/"<<instancenum<<std::endl;
+        std::cout<<i<<"/"<<instancenum<<"\r";
         std::cout.flush();
       }
       int batchsize =
           i+minibatchsize<instancenum ? minibatchsize : instancenum - i;
-      double* feature_start_ptr = feature + i*inputsize;
       double* target_start_ptr = target + i;
-
-      Forward(feature_start_ptr, batchsize);
-      Derivative(target_start_ptr, batchsize);
+      SparseDataSet* dataset = new SparseDataSet();
+      dataset->length = batchsize;
+      dataset->feature = feature + i;
+      dataset->width = trainData->width + i;
+      SparseForward(dataset);
+      Forward(nn_input, batchsize);
+      Derivative(dataset);
+      delete dataset;
     }
     double logloss;
-    LogLoss(feature, target, logloss, instancenum);
+    LogLoss(trainData, logloss, instancenum);
     std::cout<<"LogLoss:"<<logloss<<std::endl;
   }
   return true;
@@ -378,41 +543,55 @@ bool NN::Train(DataSet* trainData) {
 
 void NN::CompareWithTorch() {
   int test_size = 9;
-  std::ifstream input_fin("data/unittest.dat");
+  std::ifstream input_fin("data/sparse_unittest.dat");
   std::string line;
   std::vector<std::string> parts;
   //std::cout<<"minibatchsize:"<<minibatchsize<<std::endl;
-  double* input = new double[test_size*inputsize];
-  double* target = new double[test_size];
-  for(int i=0;i<test_size;i++) {
+  std::vector<std::vector<int> > inputs;
+  std::vector<int> targets;
+  std::string filename = "data/sparse_unittest.dat";
+  std::string binaryname = "data/tmp.txt";
+  SparseDataSet* unittest_dataset = new SparseDataSet();
+  ReadSparseData(filename, binaryname, unittest_dataset);
+  unittest_dataset->length = 9;
+/*  for(int i=0;i<test_size;i++) {
     getline(input_fin, line);
-    boost::trim(line);
     boost::split(parts, line, boost::is_any_of(" "));
-    target[i] = boost::lexical_cast<double>(parts[0]) - 1;
-    for(int j=0;j<inputsize;j++) {
-      int idx = i * inputsize + j;
-      input[idx] = boost::lexical_cast<double>(parts[j+1]);
+    int target = boost::lexical_cast<int>(parts[0]);
+    targets.push_back(target);
+    std::vector<int> input;
+    for(unsigned int j=1;j<parts.size();j++) {
+      int value = boost::lexical_cast<int>(parts[j].substr(0,parts[j].size()-2));
+      input.push_back(value);
     }
-  }
+    inputs.push_back(input);
+  }*/
+
   InitWeight("fromfile");
-  input_fin.close();
-  Forward(input, test_size);
-  double* output = GetOutput();
-  Derivative(target, test_size);
+  SparseForward(unittest_dataset);
+//  input_fin.close();
+//  Forward(input, test_size);
+//  double* output = GetOutput();
+  Derivative(unittest_dataset);
 }
 
 
-bool NN::LogLoss(double* feature, double* target, double &logloss, int instancenum) {
+bool NN::LogLoss(SparseDataSet* trainData, double &logloss, int instancenum) {
   //call LogLoss after calling Forward
   logloss = 0;
   double* logloss_tmp = new double[1];
   for(int i=0;i<instancenum;i+=minibatchsize) {
     int batchsize =
         i+minibatchsize<instancenum ? minibatchsize : instancenum - i;
-    double* feature_start_ptr = feature + i*inputsize;
-    double* target_start_ptr = target + i;
 
-    Forward(feature_start_ptr, batchsize);
+    SparseDataSet* dataset = new SparseDataSet();
+    dataset->length = batchsize;
+    dataset->feature = trainData->feature + i;
+    dataset->width = trainData->width + i;
+    double* target_start_ptr = trainData->target + i;
+    SparseForward(dataset);
+    Forward(nn_input, batchsize);
+
     double* y  = layer_values.back();
     for(int b=0;b<batchsize;b++) {
 //      std::cout<<std::endl;

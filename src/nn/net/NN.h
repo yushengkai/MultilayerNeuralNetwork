@@ -7,8 +7,10 @@
 
 #include <vector>
 #include <string>
+#include <map>
 #include "net/LookupTable.h"
 #include "tool/util.h"
+
 class NN {
  private:
   int inputsize;
@@ -17,21 +19,33 @@ class NN {
   double* softmax_sum;
   bool with_bias;
   double learning_rate;
+
+  int table_width;
+  int total_length;
+  std::vector<int> group_sizes;
+  std::vector<double*> group_ptrs;
  public:
+
+  LookupTable* lookup_table;
   std::vector<int> layersizes;
   std::vector<double*> weight_matrixs;
   std::vector<double*> bias_vectors;
   std::vector<double*> layer_values;
   std::vector<double*> delta_matrixs;
   std::vector<double*> error_matrixs;
+  std::map<int, double*> embedding_delta;
+  double* delta_x;
   double* nn_output;
+  double* nn_input;
   NN(){}
   bool Init(LookupTable *lookup_table, std::string param,
             int m, std::string init_type, bool wb, double l);
+  bool LookupFromTable(SparseDataSet* sparse_feature);
   bool Forward(double* input, int batchsize);
-  bool LogLoss(double* feature, double* target, double &logloss, int instancenum);
-  bool Derivative(double* target, int batchsize);
-  bool Train(DataSet* trainData);
+  bool SparseForward(SparseDataSet* sparse_feature);
+  bool LogLoss(SparseDataSet* trainData, double &logloss, int instancenum);
+  bool Derivative(SparseDataSet* trainData);
+  bool Train(SparseDataSet* trainData);
   void InitWeight(std::string init_type);
   int GetMinibatchSize(){return minibatchsize;}
   int GetOutputSize(){return outputsize;}
