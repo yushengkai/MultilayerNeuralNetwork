@@ -131,10 +131,45 @@ int main(void)
       std::cout<<std::endl;
     }
 
-
-
-    for(int i =0 ;i<10000;++i)
+    double* A = new double[1000000];
+    double* B = new double[1000000];
+    for(int i=0;i<1000000;i++) {
+      A[i]=i;
+      B[i]=1;
+    }
+    double* C = new double[10000];
+    while(true)
     {
+ /*        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                  100,100,100,
+                  1,A,100,
+                  B,100,
+                  0,C,100);*/
+/*          cblas_dgemv(CblasRowMajor, CblasTrans,
+                  5,5,
+                  1,A,5,
+                  B,1,
+                  0,C,1);
+
+        for(int i=0;i<100;i++){
+        //  std::cout<<C[i]<<std::endl;
+        }
+        //std::cout<<std::endl;
+*/
+        cblas_dscal(1000000, 10, A, 1);
+      //  for(int i=0;i<100;i++) {
+      //    std::cout<<A[i]<<std::endl;
+      //  }
+        cblas_dscal(1000000, 0.1, A, 1);
+      //  for(int i=0;i<100;i++) {
+      //    std::cout<<A[i]<<std::endl;
+      //  }
+      //  std::cout<<std::endl;
+
+  //    cblas_daxpy(10000, 1, A, 1, B, 1);
+  //    cblas_daxpy(10000, -1, A, 1, B, 1);
+
+      /*
         double* delta = new double[4*3];
         enum CBLAS_ORDER Order=CblasRowMajor;
         enum CBLAS_TRANSPOSE TransX=CblasNoTrans;
@@ -180,14 +215,14 @@ int main(void)
                     ones, ldb,
                     beta, sum, ldc
                    );
-        std::cout<<"sum:"<<std::endl;
+//        std::cout<<"sum:"<<std::endl;
         for(int i=0;i<9;i++) {
           for(int j=0;j<3;j++) {
             p[i*3+j]=tmp[i*3+j]/sum[i];
           }
           double likelihood = log(p[i*3 + (int)result[i]-1]);
         //  std::cout<<" my likelihood:"<<likelihood;
-          std::cout<<sum[i]<<std::endl;
+ //         std::cout<<sum[i]<<std::endl;
         }
         double* Y = new double[9*3];
         cblas_dcopy(9*3, result1, 1, Y, 1);
@@ -259,7 +294,7 @@ int main(void)
                     ones, ldb,
                     beta, sum, ldc
                    );
-        for(int i=0;i<9;i++) {
+   /*      for(int i=0;i<9;i++) {
           std::cout<<"sample:"<<i<<"\t";
           for(int j=0;j<3;j++) {
             p[i*3+j]=tmp[i*3+j]/sum[i];
@@ -268,7 +303,8 @@ int main(void)
           double likelihood = log(p[i*3 + (int)result[i]-1]);
           std::cout<<" likelihood:"<<likelihood;
           std::cout<<std::endl;
-        }
+          }*/
+
     }
     return 0;
 }

@@ -34,8 +34,9 @@ bool LookupTable::Init(std::string param, int k) {
     group_sizes.push_back(value);
     total_length += table_width * value;
   }
+  feature_length = total_length/table_width;
   central_array = new double[total_length];
-
+  delta_lookuptable = new double[total_length];
   for(int i=0; i<total_length; i++) {
     central_array[i] = normal_sample();
   }
@@ -60,6 +61,15 @@ void LookupTable::DebugInit() {
   }
 }
 
+void LookupTable::InitFromStream(std::ifstream fin) {
+  std::string line;
+  for(int i=0;i<total_length;i++) {
+    getline(fin, line);
+    boost::trim(line);
+    std::cout<<"lookup table:"<<line<<std::endl;
+  }
+}
+
 double* LookupTable::QueryVector(int groupid, int featureid) {
   if(groupid<0 || groupid >=group_sizes.size()) {
  //   LOG(ERROR)<<"groupid error: groupid = "<<groupid<<" not in "<<"[0, "
@@ -71,7 +81,6 @@ double* LookupTable::QueryVector(int groupid, int featureid) {
  //       <<group_sizes[groupid]<<")";
     return NULL;
   }
-
   return group_ptrs[groupid] + featureid*table_width;
 }
 
@@ -79,4 +88,13 @@ void LookupTable::print_argv() {
 
 }
 
-
+int LookupTable::GroupId(int real_featureid) {
+  int sum=0;
+  for(unsigned int i=0;i<group_sizes.size();i++) {
+    if(sum<real_featureid && real_featureid < sum+group_sizes[i]) {
+      return i;
+    }
+    sum+=group_sizes[i];
+  }
+  return -1;
+}

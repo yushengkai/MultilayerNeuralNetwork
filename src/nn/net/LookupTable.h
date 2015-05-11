@@ -7,22 +7,30 @@
 
 #include <string>
 #include <vector>
+#include <map>
+#include <fstream>
 
 class LookupTable {
-private:
+ public:
   int table_width;
-  int total_length;
-  double* central_array;
   std::vector<int> group_sizes;
   std::vector<double*> group_ptrs;
-public:
+
+  int total_length;
+  int feature_length;
+  double* central_array;
+  double* delta_lookuptable;
   LookupTable(){}
+  ~LookupTable(){
+  };
   bool Init(std::string param, int k);
   double* QueryVector(int groupid, int featureid);
   int GetTableWidth();
   int GetOutputWidth();
+  int GroupId(int real_featureid);
   void print_argv();
   void DebugInit();
+  void InitFromStream(std::ifstream fin);
 };
 
 

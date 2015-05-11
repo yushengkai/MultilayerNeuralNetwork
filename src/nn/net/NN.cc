@@ -28,6 +28,10 @@ bool NN::Init(LookupTable* lt, std::string param,
   learning_rate = l;
   with_bias=wb;
   minibatchsize = m;
+  tmp_ones = new double[minibatchsize];
+  for(int i=0;i<minibatchsize;i++) {
+    tmp_ones[i] = 1;
+  }
   softmax_sum = new double[minibatchsize];
   inputsize = lookup_table->GetOutputWidth();
   layersizes.push_back(inputsize);
@@ -44,16 +48,10 @@ bool NN::Init(LookupTable* lt, std::string param,
   outputsize = layersizes.back();
   std::cout<<std::endl;
   for(unsigned int i=0;i<layersizes.size();i++) {
-    if(i==0) {
-      double* layer_value = NULL;
-      layer_values.push_back(layer_value);
-      continue;
-    }
-
     int layer_value_size = minibatchsize * layersizes[i];
     double* layer_value = new double[layer_value_size];
     for(int j=0;j<layer_value_size;j++) {
-      layer_value[j] = normal_sample1();
+      layer_value[j] = 0;
     }
     layer_values.push_back(layer_value);
 
@@ -148,9 +146,6 @@ bool NN::LookupFromTable(SparseDataSet* sparse_feature) {
   if(sparse_feature->length>minibatchsize) {
     return false;
   }
-  if(nn_input==NULL) {
-    nn_input = new double[inputsize*minibatchsize];
-  }
   for(int i=0;i<inputsize*minibatchsize;i++) {
     nn_input[i] = 0;
   }
@@ -223,10 +218,6 @@ bool NN::Forward(double* input, int batchsize) {
     }
 
     if(layer == layersizes.size()-1){
-      double* ones = new double[outputsize];
-      for(int i=0;i<outputsize;i++) {
-        ones[i] = 1;
-      }
       Order = CblasRowMajor;
       TransX = CblasNoTrans;
       TransW = CblasTrans;
@@ -241,20 +232,16 @@ bool NN::Forward(double* input, int batchsize) {
       cblas_dgemm(Order, TransX, TransW,
                   M, N, K,
                   alpha, output, lda,
-                  ones, ldb,
+                  tmp_ones, ldb,
                   beta, softmax_sum, ldc
                  );
 
       for(int i=0;i<batchsize;i++) {
-        softmax_sum[i] = 1/softmax_sum[i];
-      }
-      for(int i=0;i<batchsize;i++) {
         for(int j=0;j<layersizes[layer];j++) {
           int idx = i*layersizes[layer]+j;
-          output[idx] = output[idx]*softmax_sum[i];
+          output[idx] = output[idx]/softmax_sum[i];
         }
       }
-      delete [] ones;
     }
   }
 }
@@ -276,7 +263,6 @@ bool NN::Derivative(SparseDataSet* dataset) {
         for(int j=0;j<layersize;j++) {
           factor[layersize*i + j] = 0;
         }
-
         factor[layersize*i + t]=1;
       }
 
@@ -298,10 +284,6 @@ bool NN::Derivative(SparseDataSet* dataset) {
                 X, ldb,
                 0.0, delta, ldc
                 );
-      double* ones = new double[batchsize];
-      for(int i=0;i<batchsize;i++) {
-        ones[i] = 1.0;
-      }
       M = layersize;
       N = 1;
       K = batchsize;
@@ -311,11 +293,9 @@ bool NN::Derivative(SparseDataSet* dataset) {
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                   M, N, K,
                   -1.0, factor, lda,
-                  ones, ldb,
+                  tmp_ones, ldb,
                   0.0, delta_bias,ldc
                  );
-      delete [] ones;
-
     } else if(layer>=1) {
 
       int weight_idx = layer-1;
@@ -359,10 +339,6 @@ bool NN::Derivative(SparseDataSet* dataset) {
                   0.0, delta, ldc
                  );
 
-      double* ones = new double[batchsize];
-      for(int i=0;i<batchsize;i++) {
-        ones[i]=1.0;
-      }
       M = layersize;
       N = 1;
       K = batchsize;
@@ -372,7 +348,7 @@ bool NN::Derivative(SparseDataSet* dataset) {
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                   M, N, K,
                   -1.0, factor, lda,
-                  ones, ldb,
+                  tmp_ones, ldb,
                   0.0, delta_bias, ldc
                  );
       if(layer == 1) {
@@ -389,7 +365,6 @@ bool NN::Derivative(SparseDataSet* dataset) {
                     0.0, delta_x, ldc
                    );
       }
-      delete [] ones;
     }
   }
 

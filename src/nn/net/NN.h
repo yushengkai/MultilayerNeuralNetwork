@@ -19,11 +19,11 @@ class NN {
   double* softmax_sum;
   bool with_bias;
   double learning_rate;
-
   int table_width;
   int total_length;
   std::vector<int> group_sizes;
   std::vector<double*> group_ptrs;
+  double* tmp_ones;
  public:
 
   LookupTable* lookup_table;
@@ -37,7 +37,24 @@ class NN {
   double* delta_x;
   double* nn_output;
   double* nn_input;
-  NN(){}
+  ~NN(){
+    for(int layer=0;layer<layersizes.size();layer++) {
+      if(layer>=1) {
+        delete [] weight_matrixs[layer-1];
+        delete [] bias_vectors[layer-1];
+        delete [] delta_matrixs[layer-1];
+        delete [] error_matrixs[layer-1];
+      }
+      delete [] layer_values[layer];
+
+    }
+    for(std::map<int, double*>::iterator iter=embedding_delta.begin();
+        iter!=embedding_delta.end();iter++) {
+      double* ptr = iter->second;
+      delete [] ptr;
+    }
+    delete [] delta_x;
+  }
   bool Init(LookupTable *lookup_table, std::string param,
             int m, std::string init_type, bool wb, double l);
   bool LookupFromTable(SparseDataSet* sparse_feature);
