@@ -2,7 +2,7 @@ require 'torch'
 require 'nn'
 
 trainData = {data=torch.Tensor(9,784), labels=torch.Tensor(9)}
-fid=io.open('../data/unittest.dat', 'r')
+fid=io.open('../../data/unittest.dat', 'r')
 for i=1,9 do
     line=fid:read('*l')
     idx=0
