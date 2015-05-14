@@ -6,6 +6,7 @@
 #define UTIL_H_
 #include <gflags/gflags.h>
 #include <string>
+#include <map>
 //#include <boost/random.hpp>
 
 typedef struct DataSet {
@@ -22,6 +23,8 @@ typedef struct SparseDataSet {
   int* width;
   int length;
   int max_featureid;
+  std::map<int, int> groupMaxIndex;
+  std::string table_param;
 } SparseDataSet;
 
 double sigmoid(double x);
@@ -31,8 +34,7 @@ bool ReadMNIST(std::string filename, DataSet* dataset);
 bool ReadSparseData(std::string filename, std::string binaryname, SparseDataSet* dataset);
 bool ReadSparseDataFromBin(std::string binaryname, SparseDataSet* dataset);
 bool DeleteSparseData(SparseDataSet* dataset);
-
-
+bool ReadSparseDataFromBinFolder(std::string binaryfolder, SparseDataSet* dataset);
 /*
 
 static boost::mt19937 rng(static_cast<unsigned>(std::time(0)));
