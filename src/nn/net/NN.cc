@@ -22,9 +22,19 @@ boost::normal_distribution<double> norm_dist1(0, 0.1);
 boost::variate_generator<boost::mt19937&, boost::normal_distribution<double> >
 normal_sample1(rng, norm_dist1);
 
-bool NN::Init(LookupTable* lt, std::string param,
+bool NN::Init(LookupTable* lt, std::string layer_param, std::string bias_param,
               int m, std::string init_type, bool wb, double l) {
+  bias_layer = new Bias_Layer();
+  bias_layer->Init(bias_param);
+  bias_feature = bias_layer->GetBiasFeature();
+  std::cout<<"bias feature:"<<std::endl;
+  for(std::vector<int>::iterator iter=bias_feature.begin();iter!=bias_feature.end();iter++) {
+    std::cout<<*iter<<std::endl;
+  }
+  int bias_outputsize = bias_layer->GetOutputSize();
+  std::cout<<"bias outputsize:"<<bias_outputsize<<std::endl;
   lookup_table = lt;
+  int table_outputsize = lookup_table->GetOutputWidth();
   learning_rate = l;
   with_bias=wb;
   minibatchsize = m;
@@ -33,11 +43,14 @@ bool NN::Init(LookupTable* lt, std::string param,
     tmp_ones[i] = 1;
   }
   softmax_sum = new double[minibatchsize];
-  inputsize = lookup_table->GetOutputWidth();
+
+  inputsize = table_outputsize + bias_outputsize;
+  std::cout<<"table outputsize:"<<table_outputsize<<std::endl;
+  std::cout<<"bias_outputsize:"<<bias_outputsize<<std::endl;
   layersizes.push_back(inputsize);
-  boost::trim(param);
+  boost::trim(layer_param);
   std::vector<std::string> parts;
-  boost::split(parts, param, boost::is_any_of(":"));
+  boost::split(parts, layer_param, boost::is_any_of(":"));
   for(unsigned int i=0;i<parts.size();i++) {
     int value = boost::lexical_cast<int>(parts[i]);
     if(value<=0) {
@@ -45,6 +58,11 @@ bool NN::Init(LookupTable* lt, std::string param,
     }
     layersizes.push_back(value);
   }
+  std::cout<<"NN architecture:"<<std::endl;
+  for(unsigned int i=0;i<layersizes.size();i++) {
+    std::cout<<layersizes[i]<<"->";
+  }
+  std::cout<<std::endl;
   outputsize = layersizes.back();
   for(unsigned int i=0;i<layersizes.size();i++) {
     int layer_value_size = minibatchsize * layersizes[i];
@@ -73,6 +91,12 @@ bool NN::Init(LookupTable* lt, std::string param,
   }
   delta_x = new double[inputsize*minibatchsize];
   nn_input = layer_values[0];
+  double* onehot_startptr = nn_input + table_width;
+  if(bias_layer->SetArray(onehot_startptr)) {
+    std::cout<<"init array successful"<<std::endl;
+  } else {
+    std::cout<<"init array failed"<<std::endl;
+  }
   nn_output = layer_values.back();
   InitWeight(init_type);
   return true;
@@ -156,18 +180,26 @@ bool NN::LookupFromTable(SparseDataSet* dataset) {
   int length = dataset->length;
 
   int N = lookup_table->GetTableWidth();
-
+  std::map<int, int> group_offset = lookup_table->group_offset;
   for(unsigned int ins=0;ins<length;ins++) {
     for(unsigned int i=0;i<width[ins];i++) {
       int featureid = feature[ins][i];
       int groupid=dataset->groupid[ins][i];
-      double* feature = lookup_table->QueryVector(groupid, featureid);
-      if(feature == NULL) {
-         continue;//如果找不到这个特征，就不找了，这个特征无效
+
+      if(std::find(bias_feature.begin(), bias_feature.end(), groupid) == bias_feature.end()) {
+        double* feature = lookup_table->QueryVector(groupid, featureid);
+        if(feature == NULL) {
+           continue;//如果找不到这个特征，就不找了，这个特征无效
+        }
+        //int real_featureid = (feature - lookup_table->central_array)/lookup_table->table_width;
+        double* group_input = nn_input + inputsize*ins + group_offset[groupid];
+        //std::cout<<"group offset:"<<group_offset[groupid]<<"\tgroupid:"<<groupid<<std::endl;
+        cblas_daxpy(N, 1,feature,1,group_input,1);
+      } else {
+        //std::cout<<"groupid:"<<groupid<<std::endl;
+        bias_layer->FillOneHot(groupid, featureid);
+      //  bias_layer->Print();
       }
-      int real_featureid = (feature - lookup_table->central_array)/lookup_table->table_width;
-      double* group_input = nn_input + inputsize*ins + groupid*N;
-      cblas_daxpy(N, 1,feature,1,group_input,1);
     }
   }
   return true;
@@ -268,12 +300,10 @@ bool NN::Derivative(SparseDataSet* dataset) {
         factor[layersize*i + t]=1;
       }
 
-//      std::cout<<271<<std::endl;
       double* output = layer_values.back();//minibatchsize *2
       int N = batchsize * layersize;
       double alpha = -1;
       cblas_daxpy(N, alpha, output, 1, factor, 1);
-//      std::cout<<276<<std::endl;
       int weight_idx = layer-1;
       int M = layersize;
       N = hidelayer_size;
@@ -281,14 +311,12 @@ bool NN::Derivative(SparseDataSet* dataset) {
       int lda = M;
       int ldb = N;
       int ldc = N;
-//      std::cout<<284<<std::endl;
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                 M, N, K,
                 -1.0, factor, lda,
                 X, ldb,
                 0.0, delta, ldc
                 );
-//      std::cout<<291<<std::endl;
       M = layersize;
       N = 1;
       K = batchsize;
@@ -301,7 +329,6 @@ bool NN::Derivative(SparseDataSet* dataset) {
                   tmp_ones, ldb,
                   0.0, delta_bias,ldc
                  );
-//      std::cout<<304<<std::endl;
     } else if(layer>=1) {
 
       int weight_idx = layer-1;
@@ -314,7 +341,6 @@ bool NN::Derivative(SparseDataSet* dataset) {
       int lda = K;
       int ldb = N;//之前这里是N
       int ldc = N;
-//      std::cout<<317<<std::endl;
 
       cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,//之前这里是trans， notrans
                   M, N, K,
@@ -323,7 +349,6 @@ bool NN::Derivative(SparseDataSet* dataset) {
                   0.0, factor, ldc
                  );//把下游的误差，通过权值累加到这一层
 
-//      std::cout<<326<<std::endl;
       double* O = layer_values[layer];
       for(int i=0;i<batchsize;i++) {
         for(int j=0;j<layersize;j++) {
@@ -359,7 +384,6 @@ bool NN::Derivative(SparseDataSet* dataset) {
                   tmp_ones, ldb,
                   0.0, delta_bias, ldc
                  );
-//      std::cout<<362<<std::endl;
       if(layer == 1) {
         M = batchsize;
         N = hidelayer_size;
@@ -367,21 +391,17 @@ bool NN::Derivative(SparseDataSet* dataset) {
         lda = K;
         ldb = N;
         ldc = N;
-//        std::cout<<370<<std::endl;
         cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
                     M, N, K,
                     -1.0, factor, lda,
                     weight_matrixs[0], ldb,
                     0.0, delta_x, ldc
                    );
-//        std::cout<<377<<std::endl;
       }
     }
   }
 
 
-
-//  std::cout<<384<<std::endl;
   for(int layer=layersizes.size()-1;layer>=1;layer--){
     int layersize = layersizes[layer];
     int hidelayer_size = layersizes[layer-1];
@@ -396,7 +416,6 @@ bool NN::Derivative(SparseDataSet* dataset) {
                 );
   }
 
- // std::cout<<399<<std::endl;
   int* width = dataset->width;
   int** instances = dataset->feature;
   int table_width = lookup_table->table_width;
@@ -404,21 +423,23 @@ bool NN::Derivative(SparseDataSet* dataset) {
       iter!=embedding_delta.end();iter++) {
     delete [] iter->second;
   }
- // std::cout<<407<<std::endl;
   embedding_delta.clear();
   double* delta_sums = delta_x;
   for(int i=0;i<batchsize;i++) {
     double* delta_sum = delta_sums + i*inputsize;
     for(int j=0;j<width[i];j++) {
       int groupid = dataset->groupid[i][j];
-      double* delta_group = delta_sum + table_width*groupid;
+      if(std::find(bias_feature.begin(), bias_feature.end(), groupid) != bias_feature.end()) {
+        continue;
+      }
+
+      double* delta_group = delta_sum + lookup_table->group_offset[groupid];
+      //std::cout<<"groupid:"<<groupid<<"\tgroup_offset:"
+      //    <<lookup_table->group_offset[groupid]<<std::endl;
       int featureid = instances[i][j];
       double* feature = lookup_table->QueryVector(groupid, featureid);
       int real_featureid = (feature - lookup_table->central_array)/table_width;
-     // std::cout<<"read featureid 418:"<<real_featureid
-     //     <<" groupid:"<<groupid<<" featureid:"<<featureid<<std::endl;
       if(feature == NULL) {
-      //  std::cout<<"feature ptr == NULL"<<std::endl;
         continue;
       }
       std::map<int,double*>::iterator iter = embedding_delta.find(real_featureid);
@@ -431,20 +452,16 @@ bool NN::Derivative(SparseDataSet* dataset) {
         embedding_delta[real_featureid] = feature_delta;
       }
     }
+    //std::cout<<std::endl;
   }
-
   for(std::map<int, double*>::iterator iter=embedding_delta.begin();
       iter!=embedding_delta.end();iter++) {
-//    std::cout<<"table_width:"<<table_width<<std::endl;
     double* delta = iter->second;
     int real_featureid = iter->first;
-//    std::cout<<"real_featureid 436:"<<real_featureid<<std::endl;
     double* feature_ptr = lookup_table->central_array + real_featureid*table_width;
 
     cblas_daxpy(table_width, -learning_rate, delta, 1, feature_ptr, 1);
-//    std::cout<<"real_featureid:"<<real_featureid<<" feature length:"<<lookup_table->feature_length<<" "<<438<<std::endl;
   }
-//  std::cout<<440<<std::endl;
   return true;
 
 }
@@ -462,7 +479,8 @@ bool NN::Train(SparseDataSet* trainData, SparseDataSet* testData) {
     std::cout<<"epoch:"<<epoch++<<std::endl;
     for(int i=0;i<instancenum;i+=minibatchsize) {
       if(i%1000==0) {
-        std::cout<<"\r"<<i<<"/"<<instancenum<<"      batchsize:"<<minibatchsize;
+        std::cout<<"\r"<<i<<"/"<<instancenum<<"      batchsize:"<<minibatchsize
+            <<"\ttable_width:"<<lookup_table->table_width;
         std::cout.flush();
       }
 
@@ -475,16 +493,18 @@ bool NN::Train(SparseDataSet* trainData, SparseDataSet* testData) {
       dataset->groupid = groupid + i;
       dataset->target = target + i;
       dataset->width = trainData->width + i;
-//      std::cout<<"before sparse forward"<<std::endl;
+      std::string position_bucket="";
+//      for(int i=0;i<dataset->length;i++) {
+//        position_bucket = PositionBucket(dataset->feature[i]);
+//        std::cout<<"position bucket:"<<position_bucket<<std::endl;
+//      }
       SparseForward(dataset);
-//      std::cout<<"after sparse forward"<<std::endl;
       Derivative(dataset);
-//      std::cout<<"batchsize:"<<batchsize<<std::endl;
       delete dataset;
     }
     finish = clock();
     double logloss, auc;
-    std::cerr<<"begin to compute Auc and loss"<<std::endl;
+    std::cerr<<"\nbegin to compute Auc and loss"<<std::endl;
     AUCLogLoss(testData, auc, logloss);
 
     total_time = (double)(finish - start)/CLOCKS_PER_SEC;
@@ -514,19 +534,31 @@ void NN::CompareWithTorch() {
   Derivative(unittest_dataset);
 }
 
+std::string NN::PositionBucket(int* featureid) {
+  std::string bucket;
+  std::string adtype = std::to_string(featureid[0]);
+  std::string has_img = std::to_string(featureid[1]);
+  std::string has_link = std::to_string(featureid[2]);
+  std::string adpos = std::to_string(featureid[3]);
+  bucket = adtype+"_"+has_img+"_"+has_link+"_"+adpos;
+  return bucket;
+}
+
+
 
 bool NN::AUCLogLoss(SparseDataSet* dataset,double& auc, double &logloss) {
   int instancenum = dataset->length;
-  //call LogLoss after calling Forward
   logloss = 0;
   double* logloss_tmp = new double[1];
   int kAucBucketRound = 10000;
   double* target = dataset->target;
   double* outputs = new double[instancenum];
-  double* pro_bucket = new double[2*kAucBucketRound];
-  for(int i=0;i<2*kAucBucketRound;i++) {
-    pro_bucket[i] = 0;
-  }
+  std::map<std::string, double*> pro_bucket_map;
+  std::map<std::string, int> pro_bucket_count;
+//  double* pro_bucket = new double[2*kAucBucketRound];
+//  for(int i=0;i<2*kAucBucketRound;i++) {
+//    pro_bucket[i] = 0;
+//  }
   int** confuse_matrix = new int*[2];
   for(int i=0;i<2;i++) {
     confuse_matrix[i] = new int[2];
@@ -536,38 +568,31 @@ bool NN::AUCLogLoss(SparseDataSet* dataset,double& auc, double &logloss) {
   }
   int target_idx=0;
   std::ofstream fout("data/output.txt");
-  std::cout<<std::endl;
-  std::cout<<0<<std::endl;
   for(int i=0;i<instancenum;i+=minibatchsize) {
     int batchsize =
         i+minibatchsize<instancenum ? minibatchsize : instancenum - i;
-    std::cout<<11<<std::endl;
-    SparseDataSet* dataset = new SparseDataSet();
-    dataset->length = batchsize;
-    std::cout<<11<<std::endl;
-
-    dataset->feature = dataset->feature + i;
-        std::cout<<11<<std::endl;
-
-    dataset->groupid = dataset->groupid + i;
-        std::cout<<11<<std::endl;
-
-    dataset->width = dataset->width + i;
+    if(i%1000==0) {
+      std::cout<<"\r"<<i<<"/"<<instancenum<<"      batchsize:"<<minibatchsize;
+      std::cout.flush();
+    }
+    SparseDataSet* batchdataset = new SparseDataSet();
+    batchdataset->length = batchsize;
+    batchdataset->feature = dataset->feature + i;
+    batchdataset->groupid = dataset->groupid + i;
+    batchdataset->width = dataset->width + i;
     double* target_start_ptr = dataset->target + i;
-    SparseForward(dataset);
-    std::cout<<12<<std::endl;
+    SparseForward(batchdataset);
     double* y  = layer_values.back();
-    cblas_dcopy(batchsize, y, 2, outputs+i, 1);
-    std::cout<<2<<std::endl;
+    cblas_dcopy(batchsize, y+1, 2, outputs+i, 1);
+
     for(int j=0;j<batchsize;j++) {
       for(int k=0;k<outputsize;k++) {
         fout<<y[j*outputsize+k]<<" ";
       }
       int pred=0;
-      if(y[j*outputsize]>0.5){
+      if(y[j*outputsize+1]>0.5){
         pred = 1;
       }
-      std::cout<<1<<std::endl;
       int t=target[target_idx++];
       fout<<t<<std::endl;
       confuse_matrix[t][pred]++;
@@ -619,9 +644,7 @@ bool NN::AUCLogLoss(SparseDataSet* dataset,double& auc, double &logloss) {
     }
   }
   fout.close();
-//  std::cout<<"max value:"<<maxvalue<<std::endl;
-//  std::cout<<"min value:"<<minvalue<<std::endl;
-  std::cout<<"confuse matrix:"<<std::endl;
+  std::cout<<"\nconfuse matrix:"<<std::endl;
   for(int i=0;i<2;i++) {
     for(int j=0;j<2;j++) {
       std::cout<<confuse_matrix[i][j]<<"\t";
@@ -631,40 +654,69 @@ bool NN::AUCLogLoss(SparseDataSet* dataset,double& auc, double &logloss) {
 
   double tmp = maxvalue-minvalue;
   tmp=kAucBucketRound/tmp;
+  std::string position_bucket;
+  double* global_pro_bucket = new double[2*kAucBucketRound];
+  for(int i=0;i<2*kAucBucketRound;i++) {
+    global_pro_bucket[i] = 0;
+  }
   for(int i=0;i<instancenum;i++) {
+    position_bucket = PositionBucket(dataset->feature[i]);
+ //   std::cout<<"position_bucket:"<<position_bucket<<std::endl;
+    double* pro_bucket;
+    if(pro_bucket_map.find(position_bucket) == pro_bucket_map.end()) {
+      pro_bucket = new double[2*kAucBucketRound];
+      for(int k=0;k<2*kAucBucketRound;k++) {
+        pro_bucket[k] = 0;
+      }
+      pro_bucket_map[position_bucket] = pro_bucket;
+      pro_bucket_count[position_bucket] = 0;
+      std::cout<<position_bucket<<" prosition bucket not in pro_bucket_map ..."<<std::endl;
+    } else {
+      pro_bucket = pro_bucket_map[position_bucket];
+    }
     outputs[i]-=minvalue;
     outputs[i]*=tmp;
     outputs[i] = ceil(outputs[i]);
     int idx = (int)outputs[i];
     pro_bucket[idx]++;
+    global_pro_bucket[idx]++;
+    pro_bucket_count[position_bucket]++;
     if(target[i]==1) {
       pro_bucket[idx+kAucBucketRound]++;
+      global_pro_bucket[idx + kAucBucketRound]++;
     }
   }
+  pro_bucket_map["global"] = global_pro_bucket;
 
-  double auc_temp=0;
-  double no_click=0;
-  double click_sum=0;
-  double no_click_sum=0;
-  double old_click_sum=0;
+  for(std::map<std::string, double*>::iterator iter=pro_bucket_map.begin();
+      iter!=pro_bucket_map.end();iter++) {
+    double* pro_bucket = iter->second;
+    std::string position_bucket = iter->first;
+    double auc_temp=0;
+    double no_click=0;
+    double click_sum=0;
+    double no_click_sum=0;
+    double old_click_sum=0;
 
-  for(int i=2*kAucBucketRound-1;i>=kAucBucketRound;i--) {
-    if(pro_bucket[i]!=0) {
-      double num_impression = pro_bucket[i - kAucBucketRound];
-      double num_click = pro_bucket[i];
-      auc_temp += (click_sum+old_click_sum)*no_click/2.0;
-      old_click_sum = click_sum;
-      no_click = 0;
-      no_click += num_impression-num_click;
-      no_click_sum = no_click_sum + num_impression - num_click;
-      click_sum=click_sum + num_click;
+    for(int i=2*kAucBucketRound-1;i>=kAucBucketRound;i--) {
+      if(pro_bucket[i]!=0) {
+        double num_impression = pro_bucket[i - kAucBucketRound];
+        double num_click = pro_bucket[i];
+        auc_temp += (click_sum+old_click_sum)*no_click/2.0;
+        old_click_sum = click_sum;
+        no_click = 0;
+        no_click += num_impression-num_click;
+        no_click_sum = no_click_sum + num_impression - num_click;
+        click_sum=click_sum + num_click;
+      }
     }
+    auc_temp = auc_temp+(click_sum + old_click_sum)*no_click/2.0;
+    auc = auc_temp/(click_sum*no_click_sum);
+    std::cout<<"instance num:"<<pro_bucket_count[position_bucket]<<"\t"
+        <<position_bucket<<" AUC:"<<auc<<std::endl;
+    delete [] pro_bucket;
   }
-  auc_temp = auc_temp+(click_sum + old_click_sum)*no_click/2.0;
-  auc = auc_temp/(click_sum*no_click_sum);
   delete [] outputs;
-  delete [] pro_bucket;
-
 
   std::cout<<"instancenum:"<<instancenum<<std::endl;
   logloss/=instancenum;

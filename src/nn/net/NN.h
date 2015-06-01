@@ -9,6 +9,7 @@
 #include <string>
 #include <map>
 #include "net/LookupTable.h"
+#include "net/Bias_Layer.h"
 #include "tool/util.h"
 
 class NN {
@@ -27,7 +28,9 @@ class NN {
  public:
 
   LookupTable* lookup_table;
+  Bias_Layer* bias_layer;
   std::vector<int> layersizes;
+  std::vector<int> bias_feature;
   std::vector<double*> weight_matrixs;
   std::vector<double*> bias_vectors;
   std::vector<double*> layer_values;
@@ -37,38 +40,25 @@ class NN {
   double* delta_x;
   double* nn_output;
   double* nn_input;
-  ~NN(){
-    for(int layer=0;layer<layersizes.size();layer++) {
-      if(layer>=1) {
-        delete [] weight_matrixs[layer-1];
-        delete [] bias_vectors[layer-1];
-        delete [] delta_matrixs[layer-1];
-        delete [] error_matrixs[layer-1];
-      }
-      delete [] layer_values[layer];
-
-    }
-    for(std::map<int, double*>::iterator iter=embedding_delta.begin();
-        iter!=embedding_delta.end();iter++) {
-      double* ptr = iter->second;
-      delete [] ptr;
-    }
-    delete [] delta_x;
-  }
-  bool Init(LookupTable *lookup_table, std::string param,
-            int m, std::string init_type, bool wb, double l);
-  bool LookupFromTable(SparseDataSet* sparse_feature);
+  ~NN();
+  bool Init(LookupTable *lookup_table, std::string layer_param,
+            std::string bias_param, int m, std::string init_type,
+            bool wb, double l);
+  bool LookupFromTable(SparseDataSet* dataset);
   bool Forward(double* input, int batchsize);
-  bool SparseForward(SparseDataSet* sparse_feature);
-  bool LogLoss(SparseDataSet* trainData, double &logloss, int instancenum);
-  bool Derivative(SparseDataSet* trainData);
-  bool Train(SparseDataSet* trainData);
+  bool SparseForward(SparseDataSet* dataset);
+  bool AUCLogLoss(SparseDataSet* dataset, double& auc, double &logloss);
+  bool AUC(SparseDataSet* trainData, double &auc, int instancenum);
+
+  bool Derivative(SparseDataSet* dataset);
+  bool Train(SparseDataSet* trainData, SparseDataSet* testData);
   void InitWeight(std::string init_type);
   int GetMinibatchSize(){return minibatchsize;}
   int GetOutputSize(){return outputsize;}
   int GetInputSize(){return inputsize;}
   double* GetOutput(){return nn_output;}
   void CompareWithTorch();
+  std::string PositionBucket(int* featureid);
 };
 
 

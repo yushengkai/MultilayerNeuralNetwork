@@ -23,16 +23,26 @@ int LookupTable::GetOutputWidth() {
   return table_width * group_sizes.size();
 }
 
-bool LookupTable::Init(std::string param, int k) {
-  std::vector<std::string> parts;
+bool LookupTable::Init(std::string param, std::map<int, int> term_feature_map, int k) {
+  std::vector<std::string> parts, pieces;
   total_length = 0;
   table_width = k;
   boost::trim(param);
-  boost::split(parts, param, boost::is_any_of(":"));
+  boost::split(parts, param, boost::is_any_of(","));
+  int offset = 0;
   for(unsigned int i=0;i<parts.size();i++) {
-    int value = boost::lexical_cast<int>(parts[i]);
-    group_sizes.push_back(value);
+    boost::trim(parts[i]);
+    if(parts[i] == "") {
+      continue;
+    }
+    boost::split(pieces, parts[i], boost::is_any_of(":"));
+    int groupid = boost::lexical_cast<int>(pieces[0]);
+    int value = boost::lexical_cast<int>(pieces[1]);
+    value = value+1;
+    group_sizes[groupid] = value;
     total_length += table_width * value;
+    group_offset[groupid] = offset;
+    offset+=k;
   }
   feature_length = total_length/table_width;
   central_array = new double[total_length];
@@ -40,12 +50,24 @@ bool LookupTable::Init(std::string param, int k) {
   for(int i=0; i<total_length; i++) {
     central_array[i] = normal_sample();
   }
-  int offset=0;
-  group_ptrs.push_back(central_array);
-  for(unsigned int i=0; i < group_sizes.size()-1; i++) {
-    offset += group_sizes[i] * table_width;
-    group_ptrs.push_back(central_array + offset);
+  std::map<int, int>::iterator iter = group_sizes.begin();
+  int groupid = iter->first;
+  int tmp = iter->second;
+  offset=0;
+  for(std::map<int,int>::iterator iter=group_sizes.begin();iter!=group_sizes.end();iter++) {
+    int groupid = iter->first;
+    group_ptrs[groupid] = central_array + offset;
+    offset += tmp*table_width;
+    tmp = iter->second;
   }
+  for(std::map<int, int>::iterator iter=term_feature_map.begin();
+      iter!=term_feature_map.end();iter++) {
+    int groupId = iter->first;
+    int groupId_for_convert = iter->second;
+    group_ptrs[groupId] = group_ptrs[groupId_for_convert];
+    std::cout<<"Copy group ptrs "<<groupId<<" to "<<groupId_for_convert<<std::endl;
+  }
+
   return true;
 }
 
@@ -66,21 +88,20 @@ void LookupTable::InitFromStream(std::ifstream fin) {
   for(int i=0;i<total_length;i++) {
     getline(fin, line);
     boost::trim(line);
-    std::cout<<"lookup table:"<<line<<std::endl;
   }
 }
 
 double* LookupTable::QueryVector(int groupid, int featureid) {
   if(groupid<0 || groupid >=group_sizes.size()) {
- //   LOG(ERROR)<<"groupid error: groupid = "<<groupid<<" not in "<<"[0, "
- //       <<group_sizes.size()<<")";
+//    std::cerr<<"groupid = "<<groupid<<" >= group_sizes.size() = "<<group_sizes.size()<<std::endl;
     return NULL;
   }
   if(featureid<0|| featureid >=group_sizes[groupid]) {
-  //  LOG(ERROR)<<"featureid error: featureid = "<<featureid<<" not in "<<"[0, "
- //       <<group_sizes[groupid]<<")";
+//    std::cerr<<"featureid = "<<featureid<<" >= group_sizes["<<groupid<<"] = "
+//        <<group_sizes[groupid]<<std::endl;
     return NULL;
   }
+
   return group_ptrs[groupid] + featureid*table_width;
 }
 

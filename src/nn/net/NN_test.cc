@@ -40,11 +40,12 @@ TEST_F(NN_test, TestCase) {
 
 TEST(NNDelta_Test, TestCase) {
   LookupTable* lookup_table = new LookupTable();
-  if(lookup_table->Init(FLAGS_lookup_table_param, FLAGS_lookup_table_width)) {
+  std::map<int, int> term_feature_map;
+  if(lookup_table->Init(FLAGS_lookup_table_param, term_feature_map, FLAGS_lookup_table_width)) {
 
   }
   NN* nn = new NN();
-  nn->Init(lookup_table, FLAGS_nn_param, FLAGS_minibatchsize,
+  nn->Init(lookup_table, FLAGS_nn_layer_param, FLAGS_bias_param, FLAGS_minibatchsize,
            FLAGS_init_type, FLAGS_with_bias, FLAGS_learning_rate);
 
   nn->CompareWithTorch();
@@ -81,11 +82,12 @@ TEST(NNDelta_Test, TestCase) {
 
 TEST(Embedding_test, TestCase) {
   LookupTable* lookup_table = new LookupTable();
-  if(lookup_table->Init(FLAGS_lookup_table_param, FLAGS_lookup_table_width)) {
+  std::map<int, int> term_feature_map;
+  if(lookup_table->Init(FLAGS_lookup_table_param, term_feature_map, FLAGS_lookup_table_width)) {
 
   }
   NN* nn = new NN();
-  nn->Init(lookup_table, FLAGS_nn_param, FLAGS_minibatchsize,
+  nn->Init(lookup_table, FLAGS_nn_layer_param, FLAGS_bias_param, FLAGS_minibatchsize,
            FLAGS_init_type, FLAGS_with_bias, FLAGS_learning_rate);
 
   nn->CompareWithTorch();
@@ -115,12 +117,13 @@ TEST(Embedding_test, TestCase) {
 
 TEST(ForwardTest, TestCase) {
   LookupTable* lookup_table = new LookupTable();
-  if(lookup_table->Init(FLAGS_lookup_table_param, FLAGS_lookup_table_width)) {
+  std::map<int, int> term_feature_map;
+  if(lookup_table->Init(FLAGS_lookup_table_param, term_feature_map, FLAGS_lookup_table_width)) {
 
   }
 
   NN* nn = new NN();
-  nn->Init(lookup_table, FLAGS_nn_param, FLAGS_minibatchsize,
+  nn->Init(lookup_table, FLAGS_nn_layer_param, FLAGS_bias_param, FLAGS_minibatchsize,
            FLAGS_init_type, FLAGS_with_bias, FLAGS_learning_rate);
   double* output = NULL;
   nn->CompareWithTorch();
@@ -142,12 +145,13 @@ TEST(ForwardTest, TestCase) {
 
 TEST(UpdateTest, TestCase) {
   LookupTable* lookup_table = new LookupTable();
-  if(lookup_table->Init(FLAGS_lookup_table_param, FLAGS_lookup_table_width)) {
+  std::map<int, int> term_feature_map;
+  if(lookup_table->Init(FLAGS_lookup_table_param, term_feature_map, FLAGS_lookup_table_width)) {
 
   }
 
   NN* nn = new NN();
-  nn->Init(lookup_table, FLAGS_nn_param, FLAGS_minibatchsize,
+  nn->Init(lookup_table, FLAGS_nn_layer_param, FLAGS_bias_param, FLAGS_minibatchsize,
            FLAGS_init_type, FLAGS_with_bias, FLAGS_learning_rate);
   nn->CompareWithTorch();
   //std::vector<double*> delta_matrixs = nn->delta_matrixs;

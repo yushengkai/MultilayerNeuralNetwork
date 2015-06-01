@@ -4,13 +4,13 @@
 #include "tool/util.h"
 #include <gflags/gflags.h>
 
-DEFINE_string(binaryname, "/data/yushengkai/sparse_dnn/my_text_feature/trainData.bin", "");
-DEFINE_string(filename, "/data/yushengkai/sparse_dnn/my_text_feature/trainData.txt", "");
+DEFINE_string(filename, "/data/yushengkai/sparse_dnn/sparse_dnn_test.txt", "");
+DEFINE_string(binaryname, "/data/yushengkai/sparse_dnn/sparse_dnn_test.bin", "");
 
 int main(int argc, char* argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
-  std::string binaryname = FLAGS_binaryname;
   std::string filename = FLAGS_filename;
+  std::string binaryname = FLAGS_binaryname;
   SparseDataSet* trainData = new SparseDataSet();
   if(!ReadSparseData(filename, binaryname, trainData)) {
   }

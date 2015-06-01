@@ -13,8 +13,9 @@
 class LookupTable {
  public:
   int table_width;
-  std::vector<int> group_sizes;
-  std::vector<double*> group_ptrs;
+  std::map<int, int> group_sizes;
+  std::map<int, double*> group_ptrs;
+  std::map<int, int> group_offset;
 
   int total_length;
   int feature_length;
@@ -23,7 +24,7 @@ class LookupTable {
   LookupTable(){}
   ~LookupTable(){
   };
-  bool Init(std::string param, int k);
+  bool Init(std::string param, std::map<int, int> term_feature, int k);
   double* QueryVector(int groupid, int featureid);
   int GetTableWidth();
   int GetOutputWidth();

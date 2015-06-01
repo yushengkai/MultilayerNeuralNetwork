@@ -12,7 +12,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include "tool/util.h"
-
+#include "gflag/flag.h"
 double sigmoid(double x) {
   return 1/(1+exp(-x));
 }
@@ -199,20 +199,46 @@ bool DeleteSparseData(SparseDataSet* dataset) {
   delete dataset;
 }
 
-
+int max_groupid = 28;
 bool ReadSparseDataFromBinFolder(std::string binaryfolder,
+                                 std::string bias_feature,
+                                 std::string term_feature,
+                                 std::map<int, int>& term_feature_map,
                                  SparseDataSet* dataset) {
   DIR* dir = opendir(binaryfolder.c_str());
   struct dirent *dirp;
   char* filename;
   int total_instance_num = 0;
+  std::vector<std::string> parts, pieces;
+  std::vector<int> bias_feature_vec;
+  boost::split(parts, bias_feature, boost::is_any_of(","));
+  for(unsigned int i=0;i<parts.size();i++) {
+    boost::trim(parts[i]);
+    int value = boost::lexical_cast<int>(parts[i]);
+    bias_feature_vec.push_back(value);
+  }
+  //不进行embedding的特征
+  boost::split(parts, term_feature, boost::is_any_of(";"));
+  for(unsigned int i=0;i<parts.size();i++) {
+    boost::trim(parts[i]);
+    boost::split(pieces, parts[i], boost::is_any_of(","));
+    int value = boost::lexical_cast<int>(pieces[0]);
+    for(unsigned int j=1;j<pieces.size();j++) {
+      int key = boost::lexical_cast<int>(pieces[j]);
+      term_feature_map[key] = value;
+    }
+  }
   if(dir!=NULL) {
     std::map<int, int> groupMaxIndex;
+    for(int i=1;i<=max_groupid;i++) {
+      groupMaxIndex[i] = 0;
+    }
     while((dirp = readdir(dir)) != NULL) {
       filename = dirp->d_name;
       std::string filename_str(filename);
-      if(filename_str.substr(0,4) != "part") {
+      if(filename_str.substr(0,4) != "2015") {
         continue;
+      } else {
       }
       filename_str = binaryfolder + "/" + filename_str;
       std::ifstream fin(filename_str.c_str(), std::ios::binary);
@@ -232,7 +258,7 @@ bool ReadSparseDataFromBinFolder(std::string binaryfolder,
     while((dirp = readdir(dir)) != NULL) {
       filename = dirp->d_name;
       std::string filename_str(filename);
-      if(filename_str.substr(0,4) != "part") {
+      if(filename_str.substr(0,4) != "2015") {
         continue;
       }
       filename_str = binaryfolder + "/" + filename_str;
@@ -272,16 +298,18 @@ bool ReadSparseDataFromBinFolder(std::string binaryfolder,
           std::cerr<<"file eof.[featureid] idx = "<<idx<<std::endl;
           break;
         }
-        if(idx<count_of_file) {
-          for(int j=0;j<w;j++) {
-            int fid = feature[idx][j];
-            std::map<int, int>::iterator iter = groupMaxIndex.find(groupid[idx][j]);
-            int gid = groupid[idx][j];
-            if(iter == groupMaxIndex.end()) {
-              groupMaxIndex[gid]=0;
-            }
-            groupMaxIndex[gid] = groupMaxIndex[gid]>fid?groupMaxIndex[gid]:fid;
+        for(int j=0;j<w;j++) {
+          int fid = feature[idx][j];
+          int gid = groupid[idx][j];
+          int groupId_for_convert;
+          if(term_feature_map.find(gid) != term_feature_map.end()) {
+            groupId_for_convert = term_feature_map[gid];
+            gid = groupId_for_convert;
           }
+          if(gid > max_groupid ||  gid <=0) {
+            continue;
+          }
+          groupMaxIndex[gid] = groupMaxIndex[gid]>fid?groupMaxIndex[gid]:fid;
         }
 
         idx++;
@@ -313,26 +341,29 @@ bool ReadSparseDataFromBinFolder(std::string binaryfolder,
     }
     std::string param = "";
     std::cout<<std::endl;
-    for(int i=0;i<=maxgid;i++) {
-      std::map<int, int>::iterator iter = groupMaxIndex.find(i);
-      if(iter != groupMaxIndex.end()) {
-        int value = iter->second;
-        int group_length = value+1;
-        std::string tmp = std::to_string(group_length);
-        param+=tmp;
-      } else {
-        std::string tmp = std::to_string(i);
-        param+="1";
+    for(std::map<int,int>::iterator it=groupMaxIndex.begin();it!=groupMaxIndex.end();it++) {
+      std::string gid = std::to_string(it->first);
+      std::string tmp = std::to_string(it->second);
+      if(find(bias_feature_vec.begin(), bias_feature_vec.end(), it->first) != bias_feature_vec.end()) {
+        continue;
       }
-
-      if(i<maxgid) {
-        param+=":";
+      if(it->second == 0) {
+        continue;
       }
+      param+=gid+":"+tmp+",";
     }
     dataset->table_param = param;
+    param = "";
+    for(unsigned int i=0;i<bias_feature_vec.size();i++) {
+      int gid = bias_feature_vec[i];
+      int fid = groupMaxIndex[gid];
+      param+=std::to_string(gid)+":"+std::to_string(fid)+",";
+    }
+    dataset->bias_param = param;
     //std::cout<<"max groupid:"<<maxgid<<std::endl;
     //std::cout<<"groupid num:"<<groupMaxIndex.size()<<std::endl;
-    std::cout<<"\nlookup table param:\n"<<param<<std::endl;
+    std::cout<<"\nlookup table param:\n"<<dataset->table_param<<std::endl;
+    std::cout<<"bias feature param:\n"<<dataset->bias_param<<std::endl;
     //std::cerr<<"read "<<idx<<" instances. total instance num = "<<total_instance_num<<std::endl;
     closedir(dir);
   } else {
@@ -343,4 +374,30 @@ bool ReadSparseDataFromBinFolder(std::string binaryfolder,
   return true;
 }
 
+bool DropFeature(int groupid) {
+  if(1<=groupid && groupid<=4) {
+    return true;
+  }
+  if(23<=groupid && groupid<=24) {
+    return true;
+  }
+  if(27<=groupid && groupid<=28) {
+    return true;
+  }
+  return false;
+}
 
+bool RemovePositionFeature(SparseDataSet* dataset) {
+  int length = dataset->length;
+  int* width = dataset->width;
+  int** feature = dataset->feature;
+  int** groupid = dataset->groupid;
+  for(int i=0;i<length;i++) {
+    for(int j=0;j<width[i];j++) {
+      if(DropFeature(groupid[i][j])) {
+        feature[i][j]=-1;
+      }
+    }
+  }
+  return true;
+}

@@ -25,7 +25,9 @@ typedef struct SparseDataSet {
   int max_featureid;
   std::map<int, int> groupMaxIndex;
   std::string table_param;
+  std::string bias_param;
 } SparseDataSet;
+
 
 double sigmoid(double x);
 double tanha(double );
@@ -34,7 +36,13 @@ bool ReadMNIST(std::string filename, DataSet* dataset);
 bool ReadSparseData(std::string filename, std::string binaryname, SparseDataSet* dataset);
 bool ReadSparseDataFromBin(std::string binaryname, SparseDataSet* dataset);
 bool DeleteSparseData(SparseDataSet* dataset);
-bool ReadSparseDataFromBinFolder(std::string binaryfolder, SparseDataSet* dataset);
+bool ReadSparseDataFromBinFolder(std::string binaryfolder,
+                                 std::string bias_feature,
+                                 std::string term_feature,
+                                 std::map<int, int>& term_feature_map,
+                                 SparseDataSet* dataset);
+bool RemovePositionFeature(SparseDataSet* dataset);
+
 /*
 
 static boost::mt19937 rng(static_cast<unsigned>(std::time(0)));

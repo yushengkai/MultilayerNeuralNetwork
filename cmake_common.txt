@@ -33,7 +33,7 @@ SET(LIBS
 # DO NOT EDIT BELOW LINES
 SET(CMAKE_CXX_COMPILER g++)
 SET(CMAKE_C_COMPILER gcc)
-SET(CMAKE_CXX_FLAGS "-fpermissive -Wno-deprecated -ggdb")
+SET(CMAKE_CXX_FLAGS "-fpermissive -Wno-deprecated -ggdb -g -std=c++0x")
 
 
 SET(LR_TRAIN_SRC ${CMAKE_SOURCE_DIR}/src/nn)

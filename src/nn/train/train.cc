@@ -4,24 +4,11 @@
 #include <gflags/gflags.h>
 #include <iostream>
 #include "net/NN.h"
+#include "net/Bias_Layer.h"
 #include "tool/util.h"
 #include "solver/sgd.h"
+#include "gflag/flag.h"
 /*
-DEFINE_string(lookup_table_param, "10:20:30:40", "lengths of lookup tables");
-DEFINE_int32(lookup_table_width, 196, "width of all the lookup tables");
-DEFINE_int32(minibatchsize, 50, "minibatchsize");
-DEFINE_double(sigma, 0.1, "sigma of gaussian distribution");
-DEFINE_double(mu, 0, "mu of gaussian distribution");
-DEFINE_string(init_type, "normal", "initial type normal, 123, 1, 0, fromfile");
-DEFINE_string(nn_param, "200:10", "layer size of nn");
-DEFINE_bool(with_bias, false, "with bias");
-DEFINE_string(tranfer_func, "sigmoid", "sigmoid, tanh, ReLU");
-DEFINE_string(log_dir, "./log", "log dir");
-DEFINE_double(learning_rate, 0.001, "learning rate");
-DEFINE_bool(logtostderr, true, "log into stderr");
-*/
-
-
 DECLARE_string(lookup_table_param);
 DECLARE_int32(lookup_table_width);
 DECLARE_int32(minibatchsize);
@@ -34,32 +21,41 @@ DECLARE_string(tranfer_func);
 DECLARE_string(log_dir);
 DECLARE_double(learning_rate);
 DECLARE_bool(logtostderr);
-
+*/
 
 int main(int argc, char* argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InitGoogleLogging(argv[0]);
   FLAGS_log_dir = "./log";
-
-  LookupTable* lookup_table = new LookupTable();
-  if(lookup_table->Init(FLAGS_lookup_table_param, FLAGS_lookup_table_width)) {
-
-  }
-
-  NN* nn = new NN();
-  nn->Init(lookup_table, FLAGS_nn_param, FLAGS_minibatchsize,
-           FLAGS_init_type, FLAGS_with_bias, FLAGS_learning_rate);
-  int featuresize;
-  int instancenum;
-  double* feature = NULL;
-  double* target = NULL;
-  nn->CompareWithTorch();
-  std::string filename = "/data/yushengkai/sparse_dnn/sparse_dnn_train.txt";
-  std::string binaryname = "/data/yushengkai/sparse_dnn/sparse_dnn_train.bin";
+  std::string trainfolder = "/data/yushengkai/sparse_dnn/train_binary";
+  std::string testfolder = "/data/yushengkai/sparse_dnn/test_binary";
+  //binaryname = "data/tmp.txt";
   SparseDataSet* trainData = new SparseDataSet();
-  if(!ReadSparseData(filename, binaryname, trainData)) {
+  SparseDataSet* testData = new SparseDataSet();
+  std::map<int, int> term_feature_map;
+  if(!ReadSparseDataFromBinFolder(trainfolder, FLAGS_bias_feature,
+                                  FLAGS_term_feature, term_feature_map, trainData)) {
     LOG(ERROR)<<"Read Sparse data failed...";
   }
+  if(!ReadSparseDataFromBinFolder(testfolder, FLAGS_bias_feature,
+                                  FLAGS_term_feature, term_feature_map, testData)) {
+
+  }
+//  RemovePositionFeature(testData);
+//  RemovePositionFeature(trainData);
+  LookupTable* lookup_table = new LookupTable();
+  if(lookup_table->Init(trainData->table_param, term_feature_map, FLAGS_lookup_table_width)) {
+
+  }
+  std::string bias_param = trainData->bias_param;
+  std::cout<<"bias_param:"<<bias_param<<std::endl;
+  NN* nn = new NN();
+  nn->Init(lookup_table, FLAGS_nn_layer_param, bias_param, FLAGS_minibatchsize,
+           FLAGS_init_type, FLAGS_with_bias, FLAGS_learning_rate);
+  std::cerr<<"init NN finish!"<<std::endl;
+  nn->Train(trainData, testData);
+  DeleteSparseData(trainData);
+
   /*
   std::string filename = "data/train.csv";
   LOG(INFO)<<"Begin to read train data...";
