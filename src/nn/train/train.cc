@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InitGoogleLogging(argv[0]);
   FLAGS_log_dir = "./log";
-  std::string trainfolder = "/data/yushengkai/sparse_dnn/train_binary";
+  std::string trainfolder = "/data/yushengkai/sparse_dnn/test_binary";
   std::string testfolder = "/data/yushengkai/sparse_dnn/test_binary";
   //binaryname = "data/tmp.txt";
   SparseDataSet* trainData = new SparseDataSet();

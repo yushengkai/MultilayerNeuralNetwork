@@ -218,6 +218,7 @@ bool ReadSparseDataFromBinFolder(std::string binaryfolder,
     bias_feature_vec.push_back(value);
   }
   //不进行embedding的特征
+  /*
   boost::split(parts, term_feature, boost::is_any_of(";"));
   for(unsigned int i=0;i<parts.size();i++) {
     boost::trim(parts[i]);
@@ -227,7 +228,7 @@ bool ReadSparseDataFromBinFolder(std::string binaryfolder,
       int key = boost::lexical_cast<int>(pieces[j]);
       term_feature_map[key] = value;
     }
-  }
+  }*/
   if(dir!=NULL) {
     std::map<int, int> groupMaxIndex;
     for(int i=1;i<=max_groupid;i++) {
