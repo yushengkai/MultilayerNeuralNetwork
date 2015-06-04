@@ -91,7 +91,8 @@ bool NN::Init(LookupTable* lt, std::string layer_param, std::string bias_param,
   }
   delta_x = new double[inputsize*minibatchsize];
   nn_input = layer_values[0];
-  double* onehot_startptr = nn_input + table_width;
+  double* onehot_startptr = nn_input + table_outputsize;
+  std::cout<<"table width:"<<table_outputsize<<std::endl;
   if(bias_layer->SetArray(onehot_startptr)) {
     std::cout<<"init array successful"<<std::endl;
   } else {
