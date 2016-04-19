@@ -8,8 +8,8 @@
 #include <vector>
 #include <string>
 #include <map>
-#include "net/LookupTable.h"
-#include "net/Bias_Layer.h"
+#include "net/lookup_table.h"
+#include "net/bias_layer.h"
 #include "tool/util.h"
 
 class NN {

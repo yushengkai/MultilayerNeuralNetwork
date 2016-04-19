@@ -3,8 +3,8 @@
 #include <glog/logging.h>
 #include <gflags/gflags.h>
 #include <iostream>
-#include "net/NN.h"
-#include "net/Bias_Layer.h"
+#include "net/nn.h"
+#include "net/bias_layer.h"
 #include "tool/util.h"
 #include "solver/sgd.h"
 #include "gflag/flag.h"

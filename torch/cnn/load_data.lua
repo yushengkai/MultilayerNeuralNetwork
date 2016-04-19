@@ -1,19 +1,21 @@
 require 'torch'
-fid=io.open('../../data/sparse_unittest.dat')
+fid=io.open('../../data/part-00196')
 batchsize=11
 features={}
 trainData={data={}, labels={}}
 featureid_set={}
 for i=1,batchsize do
     line = fid:read('*l')
-    label = string.match(line, "%d+")
+    label = string.match(line, " (%d+) ")
     label=tonumber(label)
+    print (label)
 --    print("label:", label)
     feature1={}
     feature2={}
     idx=0
-    for item in string.gmatch(line, "(%d+):") do
+    for item in string.gmatch(line, ":(%d+):") do
         item = tonumber(item)
+        item = item % 150000 + 1	
         if idx<20 then
             table.insert(featureid_set, item)
             table.insert(feature1, item)

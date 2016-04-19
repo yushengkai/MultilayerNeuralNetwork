@@ -6,7 +6,7 @@
 
 #include <vector>
 
-#include "net/NN.h"
+#include "net/nn.h"
 #include "tool/util.h"
 class SGD {
  private:

@@ -22,6 +22,7 @@ function test_grad()
         for i=1,#inputs do
             input = inputs[i]
             target = targets[i]+1
+            print("target",target)
             output=model:forward(input)
             fid:write(output[1],' ', output[2], "\n")
             err = criterion:forward(output, target)

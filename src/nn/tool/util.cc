@@ -85,7 +85,6 @@ bool ReadSparseData(std::string filename, std::string binaryname, SparseDataSet*
   }
   fin.clear();
   fin.seekg(0);
-  std::cout<<"count:"<<count<<std::endl;
   feature = new int*[count];
   groupid = new int*[count];
   target = new double[count];
@@ -101,30 +100,29 @@ bool ReadSparseData(std::string filename, std::string binaryname, SparseDataSet*
     }
     boost::trim(line);
     boost::split(parts, line, boost::is_any_of(" "));
-    target[idx] = boost::lexical_cast<double>(parts[1]);
-    width[idx] = parts.size() - 2;
+    target[idx] = boost::lexical_cast<double>(parts[0]);
+    width[idx] = parts.size() - 1;
     feature[idx] = new int[width[idx]];
     groupid[idx] = new int[width[idx]];
     fout.write((char*)&target[idx],sizeof(double));
-    int size=parts.size()-2;
+    int size=parts.size()-1;
     fout.write((char*)&size, sizeof(int));
 
-    for(unsigned int i=2;i<parts.size();i++) {
+    for(unsigned int i=1;i<parts.size();i++) {
       boost::trim(parts[i]);
       boost::split(pieces, parts[i], boost::is_any_of(":"));
-      feature[idx][i-2] =
+      feature[idx][i-1] =
           boost::lexical_cast<double>(pieces[1]);
-      //std::cout<<"feature id:"<<feature[idx]
-      groupid[idx][i-2] = boost::lexical_cast<int>(pieces[0]);
-      if(feature[idx][i-2] > max_feature_id) {
-        max_feature_id = feature[idx][i-2];
+      groupid[idx][i-1] = boost::lexical_cast<int>(pieces[0]);
+      if(feature[idx][i-1] > max_feature_id) {
+        max_feature_id = feature[idx][i-1];
       }
-      if(feature[idx][i-2] < min_feature_id) {
-        min_feature_id = feature[idx][i-2];
+      if(feature[idx][i-1] < min_feature_id) {
+        min_feature_id = feature[idx][i-1];
       }
     }
-    fout.write((char*)feature[idx], sizeof(int)*(parts.size()-2));
-    fout.write((char*)groupid[idx], sizeof(int)*(parts.size()-2));
+    fout.write((char*)feature[idx], sizeof(int)*(parts.size()-1));
+    fout.write((char*)groupid[idx], sizeof(int)*(parts.size()-1));
     idx++;
   }
   fout.seekp(sizeof(int));

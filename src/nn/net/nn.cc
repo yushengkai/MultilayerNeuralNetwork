@@ -15,7 +15,7 @@
 
 #include "tool/util.h"
 #include "gflag/flag.h"
-#include "net/NN.h"
+#include "net/nn.h"
 
 static boost::mt19937 rng(static_cast<unsigned>(std::time(0)));
 boost::normal_distribution<double> norm_dist1(0, 0.1);
@@ -100,6 +100,7 @@ bool NN::Init(LookupTable* lt, std::string layer_param, std::string bias_param,
   }
   nn_output = layer_values.back();
   InitWeight(init_type);
+  std::cout<<"InitWeight "<<init_type<<std::endl;
   return true;
 }
 
@@ -107,7 +108,7 @@ void NN::InitWeight(std::string init_type) {
 
   std::ifstream fin;
   if(init_type == "fromfile") {
-    fin.open("data/sparse_unittest.weight");
+    fin.open("data/embedding.weight");
 //    std::cout<<"init weight from data/weight.txt"<<std::endl;
   }
 
@@ -314,7 +315,7 @@ bool NN::Derivative(SparseDataSet* dataset) {
       int ldc = N;
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                 M, N, K,
-                -1.0, factor, lda,
+                -1.0/batchsize, factor, lda,
                 X, ldb,
                 0.0, delta, ldc
                 );
@@ -326,7 +327,7 @@ bool NN::Derivative(SparseDataSet* dataset) {
       ldc = N;
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                   M, N, K,
-                  -1.0, factor, lda,
+                  -1.0/batchsize, factor, lda,
                   tmp_ones, ldb,
                   0.0, delta_bias,ldc
                  );
@@ -368,7 +369,7 @@ bool NN::Derivative(SparseDataSet* dataset) {
 
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                   M, N, K,
-                  -1.0, factor, lda,
+                  -1.0/batchsize, factor, lda,
                   X, ldb,
                   0.0, delta, ldc
                  );
@@ -381,7 +382,7 @@ bool NN::Derivative(SparseDataSet* dataset) {
       ldc = N;
       cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
                   M, N, K,
-                  -1.0, factor, lda,
+                  -1.0/batchsize, factor, lda,
                   tmp_ones, ldb,
                   0.0, delta_bias, ldc
                  );
@@ -394,7 +395,7 @@ bool NN::Derivative(SparseDataSet* dataset) {
         ldc = N;
         cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
                     M, N, K,
-                    -1.0, factor, lda,
+                    -1.0/batchsize, factor, lda,
                     weight_matrixs[0], ldb,
                     0.0, delta_x, ldc
                    );
@@ -517,19 +518,18 @@ bool NN::Train(SparseDataSet* trainData, SparseDataSet* testData) {
 }
 
 void NN::CompareWithTorch() {
-  int test_size = 9;
-  std::ifstream input_fin("data/sparse_unittest.dat");
+  int test_size = 20;
   std::string line;
   std::vector<std::string> parts;
   //std::cout<<"minibatchsize:"<<minibatchsize<<std::endl;
   std::vector<std::vector<int> > inputs;
   std::vector<int> targets;
-  std::string filename = "data/sparse_unittest.dat";
+  std::string filename = "data/sparse_unittest.dat.tmp";
   std::string binaryname = "data/tmp.txt";
   SparseDataSet* unittest_dataset = new SparseDataSet();
   ReadSparseData(filename, binaryname, unittest_dataset);
-  unittest_dataset->length = 9;
-
+  unittest_dataset->length = 11;
+  
   InitWeight("fromfile");
   SparseForward(unittest_dataset);
   Derivative(unittest_dataset);

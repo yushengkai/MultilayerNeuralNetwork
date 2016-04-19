@@ -1,7 +1,7 @@
 // Copyright (c) 2015 Qihoo 360 Technology Co. Ltd
 // Author: Yu Shengkai (yushengkai@360.cn)
 
-#include "net/Bias_Layer.h"
+#include "net/bias_layer.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <vector>

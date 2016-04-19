@@ -4,7 +4,7 @@
 
 #include "gtest/gtest.h"
 #include "gflags/gflags.h"
-#include "net/NN.h"
+#include "net/nn.h"
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -35,9 +35,8 @@ class NN_test: public  ::testing::Test {
 
 TEST_F(NN_test, TestCase) {
   std::vector<double*> delta_matrixs = nn->delta_matrixs;
-}*/
-
-
+}
+*/
 TEST(NNDelta_Test, TestCase) {
   LookupTable* lookup_table = new LookupTable();
   std::map<int, int> term_feature_map;
@@ -50,10 +49,16 @@ TEST(NNDelta_Test, TestCase) {
 
   nn->CompareWithTorch();
   std::vector<double*> delta_matrixs = nn->delta_matrixs;
+
   std::ifstream fin("data/sparse_unittest.delta");
+  
   EXPECT_TRUE(fin!=NULL);
   std::string line="";
-  int count = 0;
+  for(int i=0;i<15000000;i++) {
+      getline(fin, line);
+  }
+  std::cout<<"here !"<<std::endl;
+  std::ofstream fout("data/gtest_delta");
   for(int layer=1;layer<nn->layersizes.size();layer++) {
     int node_num = nn->layersizes[layer];
     int input_num = nn->layersizes[layer-1];
@@ -64,20 +69,19 @@ TEST(NNDelta_Test, TestCase) {
       boost::trim(line);
       double torch_grad = boost::lexical_cast<double>(line);
       double my_grad = delta[i];
-      count++;
-
       EXPECT_NEAR(torch_grad, my_grad, 1e-6);
     }
     for(int i=0;i<node_num;i++) {
       getline(fin, line);
       boost::trim(line);
-      count++;
       double torch_grad = boost::lexical_cast<double>(line);
       double my_grad = delta_bias[i];
       EXPECT_NEAR(torch_grad, my_grad, 1e-6);
+      fout<<torch_grad<<"\t"<<my_grad<<std::endl;
     }
   }
   fin.close();
+  fout.close();
 }
 
 TEST(Embedding_test, TestCase) {
@@ -93,27 +97,49 @@ TEST(Embedding_test, TestCase) {
   nn->CompareWithTorch();
   int table_width = lookup_table->table_width;
   std::string line;
-  std::ifstream fin("data/sparse_unittest.embedding_delta");
+  std::ofstream fout("data/gtest_delta");
+  double* delta;
+  std::ifstream fin("data/sparse_unittest.delta");
+
+  std::map<int, double*> embedding_delta_torch;
+  for(int i=0;i<lookup_table->total_length;i++) {
+    int real_feature_id = i/table_width;
+    getline(fin, line);
+    boost::trim(line);
+    double torch_value = boost::lexical_cast<double>(line);
+    if(i%table_width==0) {
+      delta = new double[table_width];
+      embedding_delta_torch[real_feature_id] = delta;
+    }
+    delta[i%table_width] = torch_value;
+  }
   std::map<int, double*> embedding_delta = nn->embedding_delta;
   EXPECT_TRUE(fin!=NULL);
   std::vector<std::string> parts;
   for(std::map<int, double*>::iterator iter=embedding_delta.begin();
       iter!=embedding_delta.end();iter++) {
-    getline(fin, line);
+    //getline(fin, line);
     int real_featureid = iter->first;
     double* delta = iter->second;
-    boost::trim(line);
-    boost::split(parts, line, boost::is_any_of(" "));
+    //boost::trim(line);
+    //boost::split(parts, line, boost::is_any_of(" "));
     for(int i=0;i<table_width;i++) {
-      boost::trim(parts[i]);
-      double torch_value = boost::lexical_cast<double>(parts[i]);
+//      getline(fin, line);
+//      boost::trim(line);
+     
+     // boost::trim(parts[i]);
+//      double torch_value = boost::lexical_cast<double>(line);
+      double torch_value = embedding_delta_torch[real_featureid][i];
       double my_value = delta[i];
       EXPECT_NEAR(torch_value, my_value, 1e-6);
       //std::cout<<torch_value<<"\t"<<my_value<<"\t"<<torch_value/my_value<<std::endl;
-    }
-  }  fin.close();
-}
+      fout<<torch_value<<"\t"<<my_value<<std::endl;
 
+    }
+  }  
+  fin.close();
+  fout.close();
+}
 
 TEST(ForwardTest, TestCase) {
   LookupTable* lookup_table = new LookupTable();
@@ -132,15 +158,28 @@ TEST(ForwardTest, TestCase) {
   EXPECT_TRUE(fin!=NULL);
   std::string line="";
   output = nn->nn_output;
+  std::vector<std::string> parts;
+  std::ofstream fout("data/gtest_delta");
 
-  for(int i=0;i<nn->layersizes.back()*FLAGS_test_batchsize;i++) {
-    double my_output = output[i];
+  for(int i=0;i<FLAGS_test_batchsize;i++) {
     getline(fin, line);
     boost::trim(line);
-    double torch_output = boost::lexical_cast<double>(line);
+    boost::split(parts, line, boost::is_any_of(" "));
+
+    double my_output = output[i*2];
+    my_output = log(my_output);
+    double torch_output = boost::lexical_cast<double>(parts[0]);
     EXPECT_NEAR(torch_output, my_output , 1e-6);
+    fout<<torch_output<<"\t"<<my_output<<std::endl;
+    torch_output = boost::lexical_cast<double>(parts[1]);
+    my_output = output[i*2+1];
+    my_output = log(my_output);
+    EXPECT_NEAR(torch_output, my_output , 1e-6);
+    fout<<torch_output<<"\t"<<my_output<<std::endl;
+
   }
   fin.close();
+  fout.close();
 }
 
 TEST(UpdateTest, TestCase) {
@@ -171,7 +210,6 @@ TEST(UpdateTest, TestCase) {
       }
     }
   }
-  int count = 0;
   for(int layer=1;layer<nn->layersizes.size();layer++) {
     int node_num = nn->layersizes[layer];
     int input_num = nn->layersizes[layer-1];
@@ -183,7 +221,6 @@ TEST(UpdateTest, TestCase) {
       boost::trim(line);
       double torch_weight = boost::lexical_cast<double>(line);
       EXPECT_NEAR(torch_weight, my_weight , 1e-6);
-      //std::cout<<count++<<"\t"<<torch_weight<<"\t"<<my_weight<<std::endl;
     }
     for(int i=0;i<node_num;i++) {
       double my_weight = weight_bias[i];
@@ -191,11 +228,9 @@ TEST(UpdateTest, TestCase) {
       boost::trim(line);
       double torch_weight = boost::lexical_cast<double>(line);
       EXPECT_NEAR(torch_weight, my_weight, 1e-6);
-      //std::cout<<count++<<"\t"<<torch_weight<<"\t"<<my_weight<<std::endl;
 
     }
   }
   fin.close();
 }
-
 

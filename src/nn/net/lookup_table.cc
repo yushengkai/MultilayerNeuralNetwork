@@ -7,7 +7,7 @@
 //#include <glog/logging.h>
 
 #include "tool/util.h"
-#include "net/LookupTable.h"
+#include "net/lookup_table.h"
 
 
 static boost::mt19937 rng(static_cast<unsigned>(std::time(0)));
